@@ -19,7 +19,7 @@ ENV VOICES_DIR=src/voices/v1_0
 ENV WEB_PLAYER_PATH=/app/web
 
 # Install dependencies
-RUN uv pip install -e .
+RUN uv pip install --system -e .
 
 # Download the model
 RUN uv run --no-sync python docker/scripts/download_model.py --output api/src/models/v1_0
