@@ -103,6 +103,34 @@ Ensure all external services are running before starting Conversify.
 
 ---
 
+## 🐳 Running with Docker
+
+This project includes a Docker setup to run the entire application stack in containers. This is the recommended way to run the application.
+
+### Prerequisites
+
+- Docker and Docker Compose
+- NVIDIA GPU with drivers (for GPU mode)
+- A `.env.local` file with your LiveKit credentials (see [Installation](#-installation))
+
+### Running in CPU Mode
+
+This mode is suitable for machines without a dedicated NVIDIA GPU, such as a MacBook.
+
+```bash
+docker-compose -f docker-compose.cpu.yml up --build
+```
+
+### Running in GPU Mode
+
+This mode provides the best performance by leveraging an NVIDIA GPU for the AI models.
+
+```bash
+docker-compose -f docker-compose.gpu.yml up --build
+```
+
+---
+
 ## ⚙️ Configuration
 
 All runtime settings are in `config/config.yaml`. Key options include:
