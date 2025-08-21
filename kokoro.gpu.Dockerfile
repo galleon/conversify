@@ -1,7 +1,10 @@
 FROM python:3.11-slim
 
 # Install dependencies
-RUN pip install uv git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    pip install uv && \
+    rm -rf /var/lib/apt/lists/*
 
 # Clone the Kokoro-FastAPI repository
 RUN git clone https://github.com/remsky/Kokoro-FastAPI.git /app
