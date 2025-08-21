@@ -2,11 +2,13 @@
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
 # Install Python and other dependencies
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3-pip \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3-pip git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Python libraries
 RUN pip install torch sglang
