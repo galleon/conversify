@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conversify"
+version = "0.1.0"
+description = "Conversify is a real-time, low-latency, voice- and vision-enabled AI assistant built on LiveKit."
+authors = [{name = "Taresh"}]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "faster-whisper==1.1.1",
+    "livekit-agents~=1.0",
+    "livekit-plugins-noise-cancellation",
+    "livekit-plugins-openai",
+    "livekit-plugins-silero",
+    "livekit-plugins-turn-detector",
+    "memoripy==0.1.2",
+    "python-dotenv",
+    "soundfile",
+    "vllm==0.8.3",
+    "ctranslate2==4.4.0",
+]
+
+[tool.setuptools]
+packages = ["conversify"]
+
+[tool.uv]
+dev-dependencies = []
