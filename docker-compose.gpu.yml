@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  llm:
+    build:
+      context: .
+      dockerfile: llm.gpu.Dockerfile
+    ports:
+      - "30000:30000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - default
+
+  kokoro:
+    build:
+      context: .
+      dockerfile: kokoro.gpu.Dockerfile
+    ports:
+      - "8880:8880"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - default
+
+  conversify:
+    build:
+      context: .
+      dockerfile: conversify.Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - llm
+      - kokoro
+    volumes:
+      - ./config.gpu.yaml:/app/config.yaml
+      - .:/app
+    env_file:
+      - .env.local
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
