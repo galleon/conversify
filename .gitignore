@@ -7,3 +7,4 @@ __pycache__/
 conversify/data/memory_store/*
 conversify/data/models_cache/*
 KMS/
+conversify.egg-info/

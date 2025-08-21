@@ -40,18 +40,18 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
     cd conversify
     ```
 
-2. **Create a virtual environment** (recommended)
+2. **Create a virtual environment**
 
     ```bash
-    python -m venv venv
-    source venv/bin/activate    # Linux/macOS
-    # venv\Scripts\activate   # Windows
+    uv venv
+    source .venv/bin/activate    # Linux/macOS
+    # .venv\Scripts\activate   # Windows
     ```
 
 3. **Install dependencies**
 
     ```bash
-    pip install -r requirements.txt
+    uv pip install -e .
     python -m conversify.main download-files 
     ```
 
@@ -139,7 +139,7 @@ conversify/
 │   └── run_app.sh
 ├── .env.example            # Template for environment variables
 ├── .env.local              # Local secrets (ignored)
-├── requirements.txt
+├── pyproject.toml
 ├── .gitignore
 └── README.md
 ```
