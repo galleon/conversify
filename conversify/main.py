@@ -144,8 +144,24 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
         await background_audio.start(room=ctx.room, agent_session=session)
 
 
+import os
+import aiohttp as _aiohttp
+import functools
+
 def main():
     """Main function that initializes and runs the applicaton."""
+    __orig_ClientSession = _aiohttp.ClientSession
+
+    def _ClientSession_no_proxy(*args, **kwargs):
+        proxy = kwargs.pop("proxy", None)  # livekit-agents 1.2.6 passes this (unsupported)
+        if proxy:  # optional: map to env so requests still use the proxy
+            os.environ.setdefault("HTTP_PROXY", proxy)
+            os.environ.setdefault("HTTPS_PROXY", proxy)
+            kwargs.setdefault("trust_env", True)
+        return __orig_ClientSession(*args, **kwargs)
+
+    _aiohttp.ClientSession = _ClientSession_no_proxy
+
     # Configure basic logging BEFORE loading config
     logging.basicConfig(level="INFO", 
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -174,11 +190,12 @@ def main():
     # Define worker options using loaded config
     worker_config = app_config['worker']
     worker_options = WorkerOptions(
-        entrypoint_fnc=entrypoint_with_config, 
+        entrypoint_fnc=entrypoint_with_config,
         prewarm_fnc=prewarm_with_config,
         job_memory_warn_mb=worker_config['job_memory_warn_mb'],
         load_threshold=worker_config['load_threshold'],
         job_memory_limit_mb=worker_config['job_memory_limit_mb'],
+        initialize_process_timeout=300,
     )
 
     # Run the CLI application

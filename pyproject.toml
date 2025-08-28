@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 dependencies = [
     "faster-whisper==1.1.1",
-    "livekit-agents~=1.0",
+    "livekit-agents~=1.2.0",
     "livekit-plugins-noise-cancellation",
     "livekit-plugins-openai",
     "livekit-plugins-silero",
@@ -28,4 +28,7 @@ dependencies = [
 packages = ["conversify"]
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "pytest",
+    "pytest-asyncio"
+]
