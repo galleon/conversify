@@ -1,6 +1,6 @@
 import logging
-from dataclasses import dataclass
-from typing import Any, Dict
+from dataclasses import dataclass, replace
+from typing import Any, cast
 
 import httpx
 import openai
@@ -10,9 +10,9 @@ from livekit.agents import (
     APIConnectOptions,
     APIStatusError,
     APITimeoutError,
-    tts,
     utils,
 )
+from livekit.agents import tts
 from livekit.agents.types import (
     DEFAULT_API_CONNECT_OPTIONS,
     NOT_GIVEN,
@@ -27,51 +27,48 @@ logger = logging.getLogger(__name__)
 TTS_SAMPLE_RATE = 24000
 TTS_CHANNELS = 1
 
+
 @dataclass
 class KokoroTTSOptions:
-    """Configuration options for KokoroTTS."""
     model: TTSModels | str
     voice: TTSVoices | str
     speed: float
 
 
 class KokoroTTS(tts.TTS):
-    """TTS implementation using Kokoro API."""
-    
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         client: openai.AsyncClient | None = None,
     ) -> None:
-        """Initialize the KokoroTTS instance.
-        
-        Args:
-            client: Optional pre-configured OpenAI AsyncClient
-            config: Configuration dictionary (from config.yaml)
-        """
-        tts_config = config['tts']['kokoro']
-        
-        model = tts_config['model']
-        voice = tts_config['voice']
-        speed = tts_config['speed']
-        api_key = tts_config['api_key']
-        base_url = tts_config['base_url']
-        
+        tts_config = config["tts"]["kokoro"]
+
+        model = tts_config["model"]
+        voice = tts_config["voice"]
+        speed = tts_config["speed"]
+        api_key = tts_config["api_key"]
+        base_url = tts_config["base_url"]
+
         logger.info(f"Using TTS API URL: {base_url}")
 
         super().__init__(
-            capabilities=tts.TTSCapabilities(
-                streaming=False,
-            ),
+            capabilities=tts.TTSCapabilities(streaming=False),
             sample_rate=TTS_SAMPLE_RATE,
             num_channels=TTS_CHANNELS,
         )
 
-        self._opts = KokoroTTSOptions(
-            model=model,
-            voice=voice,
-            speed=speed,
+        logger.info(
+            "KokoroTTS init: streaming=%s, sr=%s, ch=%s, model=%s, voice=%s, speed=%s, base_url=%s",
+            self.capabilities.streaming,
+            self.sample_rate,
+            self.num_channels,
+            model,
+            voice,
+            speed,
+            base_url,
         )
+
+        self._opts = KokoroTTSOptions(model=model, voice=voice, speed=speed)
 
         self._client = client or openai.AsyncClient(
             max_retries=0,
@@ -95,13 +92,6 @@ class KokoroTTS(tts.TTS):
         voice: NotGivenOr[TTSVoices | str] = NOT_GIVEN,
         speed: NotGivenOr[float] = NOT_GIVEN,
     ) -> None:
-        """Update TTS options.
-        
-        Args:
-            model: TTS model to use
-            voice: Voice to use
-            speed: Speech speed multiplier
-        """
         if is_given(model):
             self._opts.model = model
         if is_given(voice):
@@ -115,97 +105,62 @@ class KokoroTTS(tts.TTS):
         *,
         conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
     ) -> "KokoroTTSStream":
-        """Synthesize speech from text.
-        
-        Args:
-            text: Text to synthesize
-            conn_options: Connection options
-            
-        Returns:
-            Stream of audio chunks
-        """
-        return KokoroTTSStream(
-            tts=self,
-            input_text=text,
-            conn_options=conn_options,
-            opts=self._opts,
-            client=self._client,
-        )
+        # IMPORTANT for livekit.agents 1.2.x: pass only the expected keywords;
+        # extra kwargs (like opts=, client=) will break ChunkedStream.__init__.
+        return KokoroTTSStream(tts=self, input_text=text, conn_options=conn_options)
 
 
 class KokoroTTSStream(tts.ChunkedStream):
-    """Stream implementation for KokoroTTS."""
-    
     def __init__(
         self,
         *,
         tts: KokoroTTS,
         input_text: str,
         conn_options: APIConnectOptions,
-        opts: KokoroTTSOptions,
-        client: openai.AsyncClient,
     ) -> None:
-        """Initialize the stream.
-        
-        Args:
-            tts: TTS instance
-            input_text: Text to synthesize
-            conn_options: Connection options
-            opts: TTS options
-            client: OpenAI AsyncClient
-        """
         super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
-        self._client = client
-        self._opts = opts
+        # copy options so per-stream mutations (if any) don’t affect the TTS instance
+        self._opts = replace(tts._opts)
+        self._client = tts._client
 
-    async def _run(self):
-        """Run the TTS synthesis."""
-        oai_stream = self._client.audio.speech.with_streaming_response.create(
-            input=self.input_text,
-            model=self._opts.model,
-            voice=self._opts.voice,
-            response_format="pcm",  # raw pcm buffers
-            speed=self._opts.speed,
-            timeout=httpx.Timeout(30, connect=self._conn_options.timeout),
-        )
-
+    async def _run(self, output_emitter: tts.AudioEmitter) -> None:
         request_id = utils.shortuuid()
 
-        audio_bstream = utils.audio.AudioByteStream(
-            sample_rate=TTS_SAMPLE_RATE,
-            num_channels=TTS_CHANNELS,
+        logger.info(
+            "KokoroTTSStream start: req=%s model=%s voice=%s speed=%s",
+            request_id,
+            self._opts.model,
+            self._opts.voice,
+            self._opts.speed,
         )
 
-        logger.info(f"Kokoro -> converting text to audio")
-
         try:
-            with find_time('TTS_inferencing'):
-                async with oai_stream as stream:
+            with find_time("TTS_inferencing"):
+                async with self._client.audio.speech.with_streaming_response.create(
+                    input=self._input_text,
+                    model=cast(Any, self._opts.model),
+                    voice=cast(Any, self._opts.voice),
+                    response_format="pcm",
+                    speed=self._opts.speed,
+                    timeout=httpx.Timeout(30, connect=self._conn_options.timeout),
+                ) as stream:
+                    # tell LiveKit about the stream we’re about to push
+                    output_emitter.initialize(
+                        request_id=request_id,
+                        sample_rate=self._tts.sample_rate,
+                        num_channels=TTS_CHANNELS,
+                        mime_type="audio/pcm",
+                    )
                     async for data in stream.iter_bytes():
-                        for frame in audio_bstream.write(data):
-                            self._event_ch.send_nowait(
-                                tts.SynthesizedAudio(
-                                    frame=frame,
-                                    request_id=request_id,
-                                )
-                            )
-                    # Flush any remaining data in the buffer
-                    for frame in audio_bstream.flush():
-                        self._event_ch.send_nowait(
-                            tts.SynthesizedAudio(
-                                frame=frame,
-                                request_id=request_id,
-                            )
-                        )
+                        output_emitter.push(data)
+
+            logger.info("KokoroTTSStream done: req=%s", request_id)
 
         except openai.APITimeoutError:
-            raise APITimeoutError()
+            raise APITimeoutError() from None
         except openai.APIStatusError as e:
             raise APIStatusError(
-                e.message,
-                status_code=e.status_code,
-                request_id=e.request_id,
-                body=e.body,
-            )
-        except Exception as e:
-            raise APIConnectionError() from e
+                e.message, status_code=e.status_code, request_id=e.request_id, body=e.body
+            ) from None
+        except Exception:
+            raise APIConnectionError() from None

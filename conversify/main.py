@@ -1,9 +1,23 @@
 import logging
 import asyncio
+import os
 from dotenv import load_dotenv
-from typing import Dict, Any
+from typing import Any
 from openai import AsyncClient
-import functools 
+import aiohttp as _aiohttp
+import functools
+
+__orig_ClientSession = _aiohttp.ClientSession
+
+def _ClientSession_no_proxy(*args, **kwargs):
+    proxy = kwargs.pop("proxy", None)  # livekit-agents 1.2.6 passes this (unsupported)
+    if proxy:  # optional: map to env so requests still use the proxy
+        os.environ.setdefault("HTTP_PROXY", proxy)
+        os.environ.setdefault("HTTPS_PROXY", proxy)
+        kwargs.setdefault("trust_env", True)
+    return __orig_ClientSession(*args, **kwargs)
+
+_aiohttp.ClientSession = _ClientSession_no_proxy
 
 from livekit.agents import (
     AgentSession,
@@ -23,23 +37,23 @@ from livekit.agents.types import NOT_GIVEN
 from livekit.plugins import noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from .models.tts import KokoroTTS
-from .models.stt import WhisperSTT
-from .models.llm import OpenaiLLM
-from .core.vision import video_processing_loop
-from .core.agent import ConversifyAgent
-from .utils.logger import setup_logging
-from .utils.config import ConfigManager
-from .core.callbacks import metrics_callback, shutdown_callback
+from conversify.models.tts import KokoroTTS
+from conversify.models.stt import WhisperSTT
+from conversify.models.llm import OpenaiLLM
+from conversify.core.vision import video_processing_loop
+from conversify.core.agent import ConversifyAgent
+from conversify.utils.logger import setup_logging
+from conversify.utils.config import ConfigManager
+from conversify.core.callbacks import metrics_callback, shutdown_callback
 
 logger = logging.getLogger(__name__)
 
 
-def prewarm(proc: JobProcess, config: Dict[str, Any]):
+def prewarm(proc: JobProcess, config: dict[str, Any]):
     """Prewarms resources needed by the agent, like the VAD model."""
-    logger.info("Prewarming VAD...")    
+    logger.info("Prewarming VAD...")
     vad_config = config['vad']
-    
+
     proc.userdata["vad"] = silero.VAD.load(
                                 min_speech_duration=vad_config['min_speech_duration'],
                                 min_silence_duration=vad_config['min_silence_duration'],
@@ -52,7 +66,7 @@ def prewarm(proc: JobProcess, config: Dict[str, Any]):
     logger.info("VAD prewarmed successfully.")
 
 
-async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
+async def entrypoint(ctx: JobContext, config: dict[str, Any]):
     """The main entrypoint for the agent job."""
     # Setup initial logging context
     ctx.log_context_fields = {
@@ -60,12 +74,12 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
         "job_id": ctx.job.id,
     }
     logger.info(f"Agent entrypoint started. Context: {ctx.log_context_fields}")
-    
+
     await ctx.connect()
     logger.info("Successfully connected to room.")
 
     # Create shared state dictionary for inter-task communication
-    shared_state: Dict[str, Any] = {}
+    shared_state: dict[str, Any] = {}
 
     # Initialize LLM Client here using config
     llm_config = config['llm']
@@ -85,7 +99,7 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
     # Setup the AgentSession with configured plugins
     session = AgentSession(
         vad=vad,
-        llm=OpenaiLLM(client=llm_client, config=config), 
+        llm=OpenaiLLM(client=llm_client, config=config),
         stt=WhisperSTT(config=config),
         tts=KokoroTTS(config=config),
         turn_detection=MultilingualModel() if config['agent']['use_eou'] else NOT_GIVEN
@@ -95,7 +109,7 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
     # Start the video processing loop if configured
     video_task: asyncio.Task | None = None
     vision_config = config['vision']
-    
+
     if vision_config['use']:
         logger.info("Starting video processing loop...")
         video_task = asyncio.create_task(video_processing_loop(ctx, shared_state, vision_config['video_frame_interval']))
@@ -107,7 +121,7 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
     logger.info("Waiting for participant to join...")
     participant = await ctx.wait_for_participant()
     logger.info(f"Participant '{participant.identity if participant else 'unknown'}' joined.")
-    
+
     # setup agent instance
     agent = ConversifyAgent(
         participant_identity=participant.identity,
@@ -115,7 +129,7 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
         config=config
     )
 
-    # Register the shutdown callback 
+    # Register the shutdown callback
     ctx.add_shutdown_callback(lambda: shutdown_callback(agent, video_task))
     logger.info("Shutdown callback registered.")
 
@@ -129,7 +143,7 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
         ),
         room_output_options=RoomOutputOptions(transcription_enabled=True),
     )
-    
+
     if config['agent']['use_background_audio']:
         background_audio = BackgroundAudioPlayer(
             # play office ambience sound looping in the background
@@ -147,16 +161,16 @@ async def entrypoint(ctx: JobContext, config: Dict[str, Any]):
 def main():
     """Main function that initializes and runs the applicaton."""
     # Configure basic logging BEFORE loading config
-    logging.basicConfig(level="INFO", 
+    logging.basicConfig(level="INFO",
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         handlers=[logging.StreamHandler()])
     initial_logger = logging.getLogger(__name__)
     initial_logger.info("Basic logging configured. Loading configuration...")
 
-    # Load configuration 
+    # Load configuration
     app_config = ConfigManager().load_config()
     initial_logger.info("Configuration loaded.")
-    
+
     # Load env variables
     load_dotenv(app_config['agent']['env_file'])
 
@@ -166,20 +180,23 @@ def main():
     # Now, get the properly configured logger for the main module
     logger = logging.getLogger(__name__) # Re-get logger after setup
     logger.info("Centralized logging configured. Starting LiveKit Agent application...")
-    
+
     # Create a partial function that includes the config
     entrypoint_with_config = functools.partial(entrypoint, config=app_config)
     prewarm_with_config = functools.partial(prewarm, config=app_config)
 
+    logger.info(f"prewarm_with_config: {prewarm_with_config}")
+
     # Define worker options using loaded config
     worker_config = app_config['worker']
     worker_options = WorkerOptions(
-        entrypoint_fnc=entrypoint_with_config, 
+        entrypoint_fnc=entrypoint_with_config,
         prewarm_fnc=prewarm_with_config,
         job_memory_warn_mb=worker_config['job_memory_warn_mb'],
         load_threshold=worker_config['load_threshold'],
         job_memory_limit_mb=worker_config['job_memory_limit_mb'],
     )
+    logger.info(f"worker_options: {worker_options}")
 
     # Run the CLI application
     cli.run_app(worker_options)

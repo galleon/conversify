@@ -3,6 +3,7 @@ __pycache__/
 */__pycache__/
 **/__pycache__
 ***/__pycache__
+.venv/
 .env.local
 conversify/data/memory_store/*
 conversify/data/models_cache/*

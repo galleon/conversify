@@ -1,14 +1,50 @@
-version: '3.8'
+name: conversify
+
+x-ollama-check: &ollama-check
+  # FYI: this does NOT toggle profiles at runtime — it just runs and can be
+  # used by wrapper scripts. (See note below.)
+  command: >
+    /bin/sh -c '
+    grep -q "provider *= *\"ollama\"" /config.toml &&
+    echo "true" > /tmp/needs_ollama || echo "false" > /tmp/needs_ollama'
 
 services:
-  llm:
-    build:
-      context: .
-      dockerfile: llm.cpu.Dockerfile
+  config-check:
+    image: alpine:3.20
+    volumes:
+      # Make sure this is the file you actually edit (you used config.toml elsewhere)
+      - ./config.toml:/config.toml:ro
+    <<: *ollama-check
+
+  ollama:
+    image: ollama/ollama:0.11.7
+    profiles: [ollama] # only starts when you pass --profile ollama
+    mem_limit: 12g
     ports:
-      - "30000:30000"
+      - "11434:11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_NO_MMAP: 0
+      # Optionally override model dir; default is /root/.ollama
+      # OLLAMA_MODELS: /root/.ollama
+      # Space-separated list to auto-pull on boot (handled by entrypoint)
+      # OLLAMA_AUTOPULL: "qwen2.5vl"
+    volumes:
+      # PERSIST MODELS (named volume)
+      - ollama_data:/root/.ollama
+      # If you want to reuse the HOST install instead, replace the line above with ONE of:
+      # - ${HOME}/.ollama:/root/.ollama
+      # - /usr/share/ollama:/root/.ollama
+      - ./ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
     networks:
-      - default
+      - conversify-network
+    restart: unless-stopped
 
   kokoro:
     build:
@@ -16,26 +52,57 @@ services:
       dockerfile: kokoro.cpu.Dockerfile
     ports:
       - "8880:8880"
+    restart: unless-stopped
     networks:
-      - default
+      - conversify-network
 
   conversify:
     build:
       context: .
       dockerfile: conversify.Dockerfile
+    restart: unless-stopped
     ports:
       - "8080:8080"
+    # Prewarm LiveKit plugin assets then start
+    command: /bin/sh -lc "python -m conversify.main download-files || true; python -m conversify.main start"
     depends_on:
-      - llm
-      - kokoro
-    volumes:
-      - ./config.cpu.yaml:/app/config.yaml
-      - .:/app
+      config-check:
+        condition: service_completed_successfully
+      kokoro:
+        condition: service_started
+      # Do NOT depend on `ollama` so this can run with host-based Ollama too.
     env_file:
       - .env.local
+    environment:
+      # Persist HF caches
+      HF_HOME: /opt/hf-cache
+      HUGGINGFACE_HUB_CACHE: /opt/hf-cache
+
+      # LLM endpoint:
+      # - When using containerized Ollama (profile enabled), this resolves via service DNS.
+      # - To use HOST Ollama instead, set OLLAMA_BASE_URL in .env.local to
+      #   http://host.docker.internal:11434 (Mac/Win) or http://host.docker.internal:11434
+      #   on Linux + extra_hosts below.
+      CONVERSIFY__LLM__BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434/v1}
+
+      # TTS endpoint (inside the Compose network)
+      CONVERSIFY__TTS__KOKORO__BASE_URL: http://kokoro:8880/v1
+    volumes:
+      - hf_cache:/opt/hf-cache
+      - conversify_models:/app/conversify/data/models_cache
+      - ./config.toml:/app/config.toml:ro
+      - ./conversify/prompts:/app/conversify/prompts:ro
+      - ./logs:/app/logs
     networks:
-      - default
+      - conversify-network
+    # Lets containers reach the host at "host.docker.internal" on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
-  default:
-    driver: bridge
+  conversify-network:
+
+volumes:
+  ollama_data:
+  hf_cache:
+  conversify_models:
