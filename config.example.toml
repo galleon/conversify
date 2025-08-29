@@ -1,0 +1,108 @@
+# Example configuration file for Conversify
+# Copy this to config.toml and customize for your setup
+
+[agent]
+env_file = ".env.local"
+instructions_file = "conversify/prompts/llm.txt"
+greeting = "Hey! How are you doing today?"
+goodbye = "Goodbye! Have a great day!"
+default_participant_identity = "identity-qfXx"
+use_eou = true                                 # livekit turn detection
+use_avatar = true                              # livekit turn detection
+use_background_noise_removal = true            # uses Krisp BVC noise cancellation
+use_background_audio = false                   # plays office background audio while agent speaks
+allow_interruptions = true                     # reset tts on user interruption
+
+# Speech-to-Text Configuration
+[stt.whisper]
+language = "en"
+model = "deepdml/faster-whisper-large-v3-turbo-ct2"  # For faster-whisper
+# model = "large-v3"                           # For OpenAI Whisper (simpler names)
+backend = "faster-whisper"                     # "faster-whisper" or "openai"
+device = "cpu"                                 # "cpu", "cuda", "metal" (metal only for faster-whisper)
+compute_type = "auto"                          # "int8", "int8_float16", "float16", "float32", "auto"
+model_cache_directory = "conversify/data/models_cache"
+warmup_audio = "conversify/data/warmup_audio.wav"
+
+# Example OpenAI Whisper configuration:
+# [stt.whisper]
+# language = "en"
+# model = "base"                               # tiny, base, small, medium, large-v1, large-v2, large-v3
+# backend = "openai"
+# device = "cpu"                               # "cpu" or "cuda" (no Metal support)
+# compute_type = "auto"                        # Less relevant for OpenAI whisper
+# model_cache_directory = "conversify/data/models_cache"
+# warmup_audio = "conversify/data/warmup_audio.wav"
+
+# Large Language Model Configuration
+[llm]
+base_url = "http://ollama:11434/v1"
+api_key = "ollama"
+model = "qwen2.5vl"
+temperature = 0.4
+parallel_tool_calls = false
+tool_choice = "auto"
+
+# Text-to-Speech Configuration
+[tts.kokoro]
+base_url = "http://kokoro:8880/v1"
+api_key = "NULL"
+model = "tts-1"
+voice = "af_heart"
+speed = 1.0
+
+# Voice Activity Detection
+[vad]
+min_speech_duration = 0.20      # Minimum duration (s) for speech detection
+min_silence_duration = 0.40     # Minimum silence duration (s) to detect end of speech
+prefix_padding_duration = 0.5   # Padding duration (s) before detected speech
+max_buffered_speech = 60.0      # Maximum buffered speech duration
+activation_threshold = 0.5      # Threshold for VAD
+force_cpu = false               # Force VAD to run on CPU
+sample_rate = 16000
+
+# Vision Configuration
+[vision]
+use = true
+video_frame_interval = 0.2
+
+# Memory Configuration
+[memory]
+use = false
+dir = "conversify/data/memory_store"
+load_last_n = 6
+
+# Embedding Configuration
+[embedding]
+vllm_model_name = "mxbai-embed-large"
+
+# Worker Configuration
+[worker]
+job_memory_warn_mb = 1900
+load_threshold = 1.0
+job_memory_limit_mb = 10000
+
+# Logging Configuration
+[logging]
+level = "DEBUG"
+file = "logs/app.log"
+
+# ============================================================================
+# Whisper Backend Comparison:
+#
+# faster-whisper (Default):
+# - Pros: Optimized for speed, lower memory usage, Metal support on Apple Silicon
+# - Cons: Requires separate installation, may have slight accuracy differences
+# - Best for: Production deployments, resource-constrained environments
+# - Models: Use HuggingFace model names like "deepdml/faster-whisper-large-v3-turbo-ct2"
+#
+# openai (Original):
+# - Pros: Original implementation, potentially better accuracy for some use cases
+# - Cons: Higher memory usage, slower inference, no Metal support
+# - Best for: Development, testing, maximum compatibility
+# - Models: Use simple names like "tiny", "base", "small", "medium", "large-v3"
+#
+# Installation:
+# - faster-whisper: Included by default
+# - openai-whisper: Run `uv pip install -e ".[openai-whisper]"`
+# ============================================================================
