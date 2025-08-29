@@ -6,7 +6,6 @@ from typing import Any
 
 import numpy as np
 import soundfile as sf
-from faster_whisper import WhisperModel
 
 from livekit import rtc
 from livekit.agents import (
@@ -14,11 +13,27 @@ from livekit.agents import (
     APIConnectOptions,
     stt,
 )
+from livekit.agents.types import NotGivenOr, NOT_GIVEN
 from livekit.agents.utils import AudioBuffer
 
 from .utils import WhisperModels, find_time
 import platform
 import io
+
+# Import both whisper implementations
+try:
+    from faster_whisper import WhisperModel
+    FASTER_WHISPER_AVAILABLE = True
+except ImportError:
+    FASTER_WHISPER_AVAILABLE = False
+    WhisperModel = None
+
+try:
+    import whisper  # type: ignore
+    OPENAI_WHISPER_AVAILABLE = True
+except ImportError:
+    OPENAI_WHISPER_AVAILABLE = False
+    whisper = None
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +42,11 @@ class WhisperOptions:
     """Configuration options for WhisperSTT."""
     language: str
     model: WhisperModels | str
-    device: str | None
-    compute_type: str | None
-    model_cache_directory: str | None
-    warmup_audio: str | None
+    backend: str = "faster-whisper"  # "faster-whisper" or "openai"
+    device: str | None = None
+    compute_type: str | None = None
+    model_cache_directory: str | None = None
+    warmup_audio: str | None = None
     cpu_threads: int | None = None
     num_workers: int | None = None
     beam_size: int = 1
@@ -62,6 +78,7 @@ class WhisperSTT(stt.STT):
 
         language = stt_config['language']
         model = stt_config['model']
+        backend = stt_config.get('backend', 'faster-whisper')
         device = stt_config['device']
         compute_type = stt_config['compute_type']
         model_cache_directory = stt_config['model_cache_directory']
@@ -70,11 +87,20 @@ class WhisperSTT(stt.STT):
         self._opts = WhisperOptions(
             language=language,
             model=model,
+            backend=backend,
             device=device,
             compute_type=compute_type,
             model_cache_directory=model_cache_directory,
             warmup_audio=warmup_audio
         )
+
+        # Validate backend availability
+        if self._opts.backend == "faster-whisper" and not FASTER_WHISPER_AVAILABLE:
+            raise ImportError("faster-whisper is not available. Install it with: pip install faster-whisper")
+        elif self._opts.backend == "openai" and not OPENAI_WHISPER_AVAILABLE:
+            raise ImportError("openai-whisper is not available. Install it with: pip install openai-whisper")
+        elif self._opts.backend not in ["faster-whisper", "openai"]:
+            raise ValueError(f"Unsupported backend: {self._opts.backend}. Use 'faster-whisper' or 'openai'")
 
         self._model = None
         self._initialize_model()
@@ -105,6 +131,22 @@ class WhisperSTT(stt.STT):
 
     def _initialize_model(self):
         """Initialize the Whisper model."""
+        logger.info(f"Initializing Whisper model with backend: {self._opts.backend}")
+
+        if self._opts.backend == "faster-whisper":
+            self._initialize_faster_whisper()
+        elif self._opts.backend == "openai":
+            self._initialize_openai_whisper()
+        else:
+            raise ValueError(f"Unsupported backend: {self._opts.backend}")
+
+        logger.info("Whisper model loaded successfully")
+
+    def _initialize_faster_whisper(self):
+        """Initialize faster-whisper model."""
+        if WhisperModel is None:
+            raise ImportError("faster-whisper is not available")
+
         device = self._default_device(self._opts.device)
         compute_type = self._default_compute(self._opts.compute_type, device)
 
@@ -128,7 +170,32 @@ class WhisperSTT(stt.STT):
             cpu_threads=self._opts.cpu_threads or 0,
             num_workers=self._opts.num_workers or 1,
         )
-        logger.info("Whisper model loaded successfully")
+
+    def _initialize_openai_whisper(self):
+        """Initialize OpenAI whisper model."""
+        if whisper is None:
+            raise ImportError("openai-whisper is not available")
+
+        # For OpenAI whisper, device handling is simpler
+        device = self._default_device(self._opts.device)
+        if device == "metal":
+            device = "cuda"  # OpenAI whisper doesn't support Metal directly
+
+        logger.info(f"Using device: {device}")
+
+        # Ensure cache directories exist
+        model_cache_dir = (
+            os.path.expanduser(self._opts.model_cache_directory)
+            if self._opts.model_cache_directory else None
+        )
+
+        if model_cache_dir:
+            os.makedirs(model_cache_dir, exist_ok=True)
+            logger.info(f"Using model cache directory: {model_cache_dir}")
+            # Set the cache directory for OpenAI whisper
+            os.environ["WHISPER_CACHE_DIR"] = model_cache_dir
+
+        self._model = whisper.load_model(str(self._opts.model), device=device)
 
     def _warmup(self, warmup_audio_path: str) -> None:
         """Performs a warmup transcription.
@@ -142,12 +209,27 @@ class WhisperSTT(stt.STT):
                 audio, _ = sf.read(warmup_audio_path, dtype="float32")
                 if audio.ndim > 1:
                     audio = np.mean(audio, axis=1)
-                segments, _ = self._model.transcribe(
-                    audio,
-                    language=self._opts.language,
-                    beam_size=self._opts.beam_size,  # use configured beam
-                )
-                text = " ".join(s.text for s in segments)
+
+                if self._opts.backend == "faster-whisper":
+                    if self._model is None:
+                        raise RuntimeError("Faster-whisper model not initialized")
+                    segments, _ = self._model.transcribe(
+                        audio,
+                        language=self._opts.language,
+                        beam_size=self._opts.beam_size,
+                    )
+                    text = " ".join(s.text for s in segments)
+                else:  # openai
+                    if self._model is None:
+                        raise RuntimeError("OpenAI whisper model not initialized")
+                    result = self._model.transcribe(
+                        audio,
+                        language=self._opts.language,
+                        beam_size=self._opts.beam_size,
+                        best_of=self._opts.best_of,
+                    )
+                    text = result.get("text", "") if isinstance(result, dict) else ""
+
             logger.info(f"STT engine warmed up. Text: {text}")
         except Exception as e:
             logger.error(f"Failed to warm up STT engine: {e}")
@@ -200,7 +282,7 @@ class WhisperSTT(stt.STT):
         self,
         buffer: AudioBuffer,
         *,
-        language: str | None,
+        language: NotGivenOr[str] = NOT_GIVEN,
         conn_options: APIConnectOptions,
     ) -> stt.SpeechEvent:
         """Implement speech recognition.
@@ -213,9 +295,13 @@ class WhisperSTT(stt.STT):
         Returns:
             Speech recognition event
         """
+        # Convert NotGivenOr to str | None for internal use
+        lang: str | None = None
+        if language is not NOT_GIVEN:
+            lang = str(language) if language is not None else None
         try:
             logger.info("Received audio, transcribing to text")
-            options = self._sanitize_options(language=language)
+            options = self._sanitize_options(language=lang)
             wav_bytes = rtc.combine_audio_frames(buffer).to_wav_bytes()
 
             # Parse WAV from bytes (don't np.frombuffer raw!)
@@ -224,19 +310,34 @@ class WhisperSTT(stt.STT):
                 audio = np.mean(audio, axis=1)
 
             with find_time('STT_inference'):
-                segments, info = self._model.transcribe(
-                    audio,
-                    language=options.language,
-                    beam_size=self._opts.beam_size,
-                    best_of=self._opts.best_of,
-                    condition_on_previous_text=self._opts.condition_on_previous_text,
-                    vad_filter=self._opts.vad_filter,
-                    vad_parameters={"min_silence_duration_ms": self._opts.vad_min_silence_ms},
-                    word_timestamps=self._opts.word_timestamps,
-                    initial_prompt=self._opts.initial_prompt,
-                )
-
-            full_text = " ".join(s.text.strip() for s in segments)
+                if self._opts.backend == "faster-whisper":
+                    if self._model is None:
+                        raise RuntimeError("Faster-whisper model not initialized")
+                    segments, info = self._model.transcribe(
+                        audio,
+                        language=options.language,
+                        beam_size=self._opts.beam_size,
+                        best_of=self._opts.best_of,
+                        condition_on_previous_text=self._opts.condition_on_previous_text,
+                        vad_filter=self._opts.vad_filter,
+                        vad_parameters={"min_silence_duration_ms": self._opts.vad_min_silence_ms},
+                        word_timestamps=self._opts.word_timestamps,
+                        initial_prompt=self._opts.initial_prompt,
+                    )
+                    full_text = " ".join(s.text.strip() for s in segments)
+                else:  # openai
+                    if self._model is None:
+                        raise RuntimeError("OpenAI whisper model not initialized")
+                    result = self._model.transcribe(
+                        audio,
+                        language=options.language,
+                        beam_size=self._opts.beam_size,
+                        best_of=self._opts.best_of,
+                        condition_on_previous_text=self._opts.condition_on_previous_text,
+                        word_timestamps=self._opts.word_timestamps,
+                        initial_prompt=self._opts.initial_prompt,
+                    )
+                    full_text = result.get("text", "").strip() if isinstance(result, dict) else ""
             return stt.SpeechEvent(
                 type=stt.SpeechEventType.FINAL_TRANSCRIPT,
                 alternatives=[stt.SpeechData(text=full_text or "", language=options.language)],

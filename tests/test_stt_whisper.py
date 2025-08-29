@@ -58,6 +58,7 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
             "whisper": {
                 "language": "en",
                 "model": "small",
+                "backend": "faster-whisper",
                 "device": None,
                 "compute_type": None,
                 "model_cache_directory": None,
@@ -71,10 +72,13 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
     # Sanity check: with our patched platform, it should prefer "metal"
     assert stt_inst._default_device(None) == "metal"
 
+    from livekit.agents import APIConnectOptions
+    from livekit.agents.types import NOT_GIVEN
+
     event = await stt_inst._recognize_impl(
         buffer=None,
         language="en",
-        conn_options=None,
+        conn_options=APIConnectOptions(),
     )
 
     assert event.type == mod.stt.SpeechEventType.FINAL_TRANSCRIPT

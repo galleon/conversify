@@ -24,6 +24,9 @@ dependencies = [
     "soundfile>=0.13.1",
 ]
 
+[project.optional-dependencies]
+openai-whisper = ["openai-whisper>=20231117"]
+
 [tool.setuptools]
 packages = ["conversify"]
 

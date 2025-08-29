@@ -62,11 +62,23 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
     nano .env.local  # Add your LiveKit and other credentials
     ```
 
-5. **Update `config/config.yaml`**
+5. **Update `config.toml`**
+
+    ```bash
+    cp config.example.toml config.toml
+    nano config.toml  # Customize for your setup
+    ```
 
     - Set LLM API endpoint and model names
-    - Configure STT/TTS server URLs and parameters
+    - Configure STT backend (faster-whisper or OpenAI Whisper) and parameters
+    - Configure TTS server URLs and parameters
     - Adjust vision and memory settings as needed
+
+6. **Install optional STT backend (if using OpenAI Whisper)**
+
+    ```bash
+    uv pip install -e ".[openai-whisper]"
+    ```
 
 ---
 
@@ -133,14 +145,30 @@ docker-compose -f docker-compose.gpu.yml up --build
 
 ## ⚙️ Configuration
 
-All runtime settings are in `config/config.yaml`. Key options include:
+All runtime settings are in `config.toml` (see `config.example.toml` for a comprehensive example with comments). Key options include:
 
-- **STT**: model selection and parameters
+- **STT**: backend selection (`faster-whisper` or `openai`), model selection and parameters
 - **LLM**: endpoint URLs and model names
 - **TTS**: voice options and server settings
 - **Vision**: enable/disable frame analysis and thresholds
 - **Memory**: persistence and retrieval parameters
 - **Logging**: level and file path (`app.log`)
+
+### STT Backend Options
+
+The application supports two Whisper backends:
+
+- **faster-whisper** (default): Optimized for speed and lower memory usage
+- **openai**: Original OpenAI Whisper implementation
+
+Configure in `config.toml`:
+```toml
+[stt.whisper]
+backend = "faster-whisper"  # or "openai"
+model = "large-v3"
+language = "en"
+# ... other options
+```
 
 Secrets and credentials reside in `.env.local`, following the template in `.env.example`.
 
@@ -150,21 +178,16 @@ Secrets and credentials reside in `.env.local`, following the template in `.env.
 
 ```plaintext
 conversify/
-├── config/
-│   └── config.yaml         # All application settings
 ├── conversify/
 │   ├── core/               # Orchestration and agent logic
-│   ├── stt/                # Speech-to-text client
-│   ├── tts/                # Text-to-speech client
-│   ├── llm/                # LLM integration client
-│   ├── livekit/            # LiveKit session & media management
+│   ├── models/             # STT, TTS, and LLM model integrations
+│   ├── prompts/            # LLM system prompts
 │   └── utils/              # Logger and shared utilities
-├── prompts/
-│   └── llm.txt             # System prompt for LLM
 ├── scripts/
 │   ├── run_llm.sh
 │   ├── run_kokoro.sh
 │   └── run_app.sh
+├── config.toml             # All application settings
 ├── .env.example            # Template for environment variables
 ├── .env.local              # Local secrets (ignored)
 ├── pyproject.toml

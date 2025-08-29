@@ -13,6 +13,7 @@ allow_interruptions = true                     # reset tts on user interruption
 [stt.whisper]
 language = "en"
 model = "deepdml/faster-whisper-large-v3-turbo-ct2"
+backend = "faster-whisper"                     # "faster-whisper" or "openai"
 device = "cpu"
 compute_type = "auto"                          # "int8_float16"
 model_cache_directory = "conversify/data/models_cache"
