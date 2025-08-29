@@ -1,58 +1,58 @@
 import logging
 import re
-import asyncio 
-from typing import AsyncIterable, Dict, Any
+import asyncio
+from typing import AsyncIterable, Any
 
 from livekit.agents import (
     Agent,
-    llm, 
-    FunctionTool, 
-    ChatContext 
+    llm,
+    FunctionTool,
+    ChatContext
 )
-from livekit.agents.voice import ModelSettings 
-from livekit import rtc 
-from livekit.agents.llm.chat_context import ImageContent 
+from livekit.agents.voice import ModelSettings
+from livekit import rtc
+from livekit.agents.llm.chat_context import ImageContent
 
 from .memory import AgentMemoryManager
 
 logger = logging.getLogger(__name__)
 
 class ConversifyAgent(Agent):
-    """ 
+    """
     Agent class that handles interaction logic, including optional
     memory management and image processing.
     Depends on shared_state for inter-task communication (e.g., latest_image)
     and an AgentMemoryManager instance for persistence.
     """
-    def __init__(self, 
+    def __init__(self,
                  participant_identity: str,
-                 shared_state: Dict[str, Any],
-                 config: Dict[str, Any]) -> None: 
-        
+                 shared_state: dict[str, Any],
+                 config: dict[str, Any]) -> None:
+
         agent_config = config['agent']
         memory_config = config['memory']
-        
+
         # Get instructions from the config for the Agent constructor
         super().__init__(
-            instructions=agent_config['instructions'], 
+            instructions=agent_config['instructions'],
             allow_interruptions=agent_config['allow_interruptions']
         )
-        
+
         # Use default participant identity if it's provided and not empty
         self.participant_identity = agent_config['default_participant_identity'] or participant_identity
-        
-        self.config = config 
+
+        self.config = config
         self.shared_state = shared_state
         self.vision_keywords = ['see', 'look', 'picture', 'image', 'visual', 'color', 'this', 'object', 'view', 'frame', 'screen', 'desk', 'holding']
-        
+
         # Initialize memory handler using config if enabled
         self.memory_handler = None
         if memory_config['use']:
             self.memory_handler = AgentMemoryManager(
                 participant_identity=self.participant_identity,
-                config=config 
+                config=config
             )
-        
+
         logger.info(f"ConversifyAgent initialized for identity: {self.participant_identity}. Memory: {'Enabled' if self.memory_handler else 'Disabled'}")
 
     async def on_enter(self):
@@ -62,9 +62,9 @@ class ConversifyAgent(Agent):
             logger.info("Loading agent memory...")
             await self.memory_handler.load_memory(self.update_chat_ctx)
             logger.info("Agent memory loaded.")
-        
+
         await self.session.say(self.config['agent']['greeting'])
-        
+
     async def on_exit(self):
         """Called when the agent leaves. Says goodbye."""
         logger.info(f"Agent '{self.participant_identity}' exiting session.")
@@ -76,7 +76,7 @@ class ConversifyAgent(Agent):
         if 'latest_image' not in self.shared_state:
             logger.warning("No 'latest_image' key found in shared_state")
             return
-            
+
         latest_image = self.shared_state['latest_image']
         if not latest_image:
             logger.debug("Latest image is None or empty")
@@ -91,16 +91,16 @@ class ConversifyAgent(Agent):
             return
 
         user_text = last_message.content[0]
-        
+
         should_add_image = any(keyword in user_text.lower() for keyword in self.vision_keywords)
 
         if should_add_image:
             logger.info(f"Vision keyword found in '{user_text[:50]}...'. Adding image to context.")
             if not isinstance(last_message.content, list):
-                 last_message.content = [last_message.content] 
+                 last_message.content = [last_message.content]
             last_message.content.append(ImageContent(image=latest_image))
             logger.debug("Successfully added ImageContent to the last message.")
-        
+
     @staticmethod
     def clean_text(text_chunk: str) -> str:
         """Cleans text by removing special tags, code blocks, markdown, and emojis."""
@@ -130,7 +130,7 @@ class ConversifyAgent(Agent):
     ) -> AsyncIterable[llm.ChatChunk]:
         """Processes context via LLM, potentially adding image first. Delegates to default."""
         logger.debug(f"LLM node received context with {len(chat_ctx.items)} items.")
-        
+
         # Only process image if vision is enabled in config
         if self.config['vision']['use']:
             self.process_image(chat_ctx)
@@ -145,9 +145,9 @@ class ConversifyAgent(Agent):
     ) -> AsyncIterable[rtc.AudioFrame]:
         """Cleans text stream and delegates to default TTS node."""
         logger.debug("TTS node received text stream.")
-        
+
         cleaned_text_chunks = []
-        
+
         async for chunk in text:
             # Process each chunk with the clean_text method
             cleaned_chunk = self.clean_text(chunk)
@@ -159,12 +159,10 @@ class ConversifyAgent(Agent):
             async def text_stream():
                 for cleaned_chunk in cleaned_text_chunks:
                     yield cleaned_chunk
-            
+
             # Pass self as the first parameter to the default.tts_node method
             async for frame in self.default.tts_node(self, text_stream(), model_settings):
                 yield frame
             logger.debug("TTS node finished streaming audio frames.")
         else:
             logger.info("No text content left after cleaning for TTS.")
-
-    

@@ -60,6 +60,7 @@ services:
     build:
       context: .
       dockerfile: conversify.Dockerfile
+    mem_limit: 12g
     restart: unless-stopped
     ports:
       - "8080:8080"

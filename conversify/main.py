@@ -32,8 +32,8 @@ from livekit.agents import (
     BuiltinAudioClip,
     metrics
 )
-from livekit.plugins import silero
 from livekit.agents.types import NOT_GIVEN
+from livekit.plugins import silero, simli
 from livekit.plugins import noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
@@ -102,7 +102,8 @@ async def entrypoint(ctx: JobContext, config: dict[str, Any]):
         llm=OpenaiLLM(client=llm_client, config=config),
         stt=WhisperSTT(config=config),
         tts=KokoroTTS(config=config),
-        turn_detection=MultilingualModel() if config['agent']['use_eou'] else NOT_GIVEN
+        turn_detection=MultilingualModel() if config['agent']['use_eou'] else NOT_GIVEN,
+        resume_false_interruption=False,
     )
     logger.info("AgentSession created.")
 
@@ -133,16 +134,38 @@ async def entrypoint(ctx: JobContext, config: dict[str, Any]):
     ctx.add_shutdown_callback(lambda: shutdown_callback(agent, video_task))
     logger.info("Shutdown callback registered.")
 
+    # Add a virtual avatar to the session, if desired
+    if config['agent']['use_avatar']:
+        simli_api_key = os.getenv("SIMLI_API_KEY")
+        simli_face_id = os.getenv("SIMLI_FACE_ID")
+
+        if not simli_api_key or not simli_face_id:
+            raise RuntimeError(
+                "Missing SIMLI_API_KEY or SIMLI_FACE_ID in environment. "
+                "Set them in .env.local (and ensure agent.env_file points to it)."
+            )
+
+        simli_avatar = simli.AvatarSession(
+            simli_config=simli.SimliConfig(
+                api_key=simli_api_key,
+                face_id=simli_face_id,
+            ),
+        )
+
+        await simli_avatar.start(session, room=ctx.room)
+
     # Start the agent session
     logger.info("Starting agent session...")
     await session.start(
         agent=agent,
         room=ctx.room,
         room_input_options=RoomInputOptions(
-            noise_cancellation=noise_cancellation.BVC() if config['agent']['use_background_noise_removal'] else NOT_GIVEN,
+            noise_cancellation=noise_cancellation.BVC()
+            if config['agent']['use_background_noise_removal'] else None,
         ),
         room_output_options=RoomOutputOptions(transcription_enabled=True),
     )
+
 
     if config['agent']['use_background_audio']:
         background_audio = BackgroundAudioPlayer(

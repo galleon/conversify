@@ -313,10 +313,11 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "faster-whisper" },
-    { name = "livekit-agents" },
+    { name = "livekit-agents", extra = ["turn-detector"] },
     { name = "livekit-plugins-noise-cancellation" },
     { name = "livekit-plugins-openai" },
     { name = "livekit-plugins-silero" },
+    { name = "livekit-plugins-simli" },
     { name = "livekit-plugins-turn-detector" },
     { name = "memoripy" },
     { name = "python-dotenv" },
@@ -334,10 +335,11 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9,<4" },
     { name = "faster-whisper", specifier = ">=1.2.0" },
-    { name = "livekit-agents", specifier = ">=1.2.6" },
+    { name = "livekit-agents", extras = ["turn-detector"], specifier = "~=1.2" },
     { name = "livekit-plugins-noise-cancellation", specifier = ">=0.2.5" },
     { name = "livekit-plugins-openai", specifier = ">=0.11.0" },
     { name = "livekit-plugins-silero", specifier = ">=1.2.6" },
+    { name = "livekit-plugins-simli", specifier = ">=1.2.7" },
     { name = "livekit-plugins-turn-detector", specifier = ">=1.2.6" },
     { name = "memoripy", specifier = ">=0.1.2" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
@@ -932,7 +934,7 @@ wheels = [
 
 [[package]]
 name = "livekit-agents"
-version = "1.2.6"
+version = "1.2.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -960,9 +962,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/bf/bac08aefd9a104eee71b10c4c756beb3cca793d7a60d8fd9d45114d9c858/livekit_agents-1.2.6.tar.gz", hash = "sha256:82dcc2d5d9f017baecc475ebd2a8e3a910d5bff307a8b8477092d71839057a88", size = 508083 }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/84/c6b325a6416ec217d09d948415b3a48915912f818ad5559b167294dbbfb2/livekit_agents-1.2.7.tar.gz", hash = "sha256:1a6c6ea77e573da216e5efa8cac9b878c244db6668f63f6f0b396fb801a3dc98", size = 510127 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/01/04413dd215c9607590069eda36c85796bd57460e446d91de1ad6e2126054/livekit_agents-1.2.6-py3-none-any.whl", hash = "sha256:f468753ad99ed5dbce9b334b87d5c56a5d1a702a7f7c9ab8488e243c1769c7fc", size = 570870 },
+    { url = "https://files.pythonhosted.org/packages/2d/53/02ccf37eda137f67f788912c3ee95c64dbb09a1f56832a5ddfc4ac24b964/livekit_agents-1.2.7-py3-none-any.whl", hash = "sha256:4f8987c4708c4ccb59d4ced04970cd09b58ae66ec87c4e81753670c9c53267eb", size = 573032 },
 ]
 
 [package.optional-dependencies]
@@ -972,6 +974,9 @@ codecs = [
 ]
 images = [
     { name = "pillow" },
+]
+turn-detector = [
+    { name = "livekit-plugins-turn-detector" },
 ]
 
 [[package]]
@@ -1055,8 +1060,20 @@ wheels = [
 ]
 
 [[package]]
+name = "livekit-plugins-simli"
+version = "1.2.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "livekit-agents" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/80/14/ee29a02fece1db9cff0c18220f374906b5c783a6b2d0ad17b9a0d7e80ccf/livekit_plugins_simli-1.2.7.tar.gz", hash = "sha256:bba03a36f8e3b9b85353dbc984d75983a9dca64a7d3376e7b6c6ab8393466f24", size = 4851 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/c9/79c5df62d29f17236799e1e9d612da7130fcc2f6c45f569ddeaff5c0fd7d/livekit_plugins_simli-1.2.7-py3-none-any.whl", hash = "sha256:a54a05b7e299d1775cbd1a900313631e68a23ef66d4d76de786d45f4b593602d", size = 4956 },
+]
+
+[[package]]
 name = "livekit-plugins-turn-detector"
-version = "1.2.6"
+version = "1.2.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
@@ -1065,9 +1082,9 @@ dependencies = [
     { name = "onnxruntime" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/5c/a1173b152b5928007f541a95ca9ee521d3747b2c25d4003b6164faf686b2/livekit_plugins_turn_detector-1.2.6.tar.gz", hash = "sha256:d069420ea5966911486b102bdebd01a92198761acebcc33a8b901f05a5fc1382", size = 8131 }
+sdist = { url = "https://files.pythonhosted.org/packages/9e/c5/7a642fc8114471e768b3365b4be8f49d73ea7d3fc1e7e757eea72c79a1f6/livekit_plugins_turn_detector-1.2.7.tar.gz", hash = "sha256:24601ad534ca2a32ae352c28e2a33d7a1d57811d36215b1865dd95b40104eda0", size = 8132 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/98/5b092d83cfae1545131f3d0e23c8029d00ad3018f6346f70ee051ed3bdc2/livekit_plugins_turn_detector-1.2.6-py3-none-any.whl", hash = "sha256:05aa303cab9fc0e655103dd9011a258dcf41318f2ab9e070e901b19b425b21d0", size = 9889 },
+    { url = "https://files.pythonhosted.org/packages/77/47/21ae5edb1e2147437622cc95bc8068c99911d6858a97d8188601dbd2eeca/livekit_plugins_turn_detector-1.2.7-py3-none-any.whl", hash = "sha256:c5ee98b7d4bff29cfc12fa2b9ce8701596af69778feeb2697c325ef7b5a284dd", size = 9890 },
 ]
 
 [[package]]
