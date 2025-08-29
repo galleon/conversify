@@ -106,7 +106,6 @@ async def entrypoint(ctx: JobContext, config: dict[str, Any]):
         stt=WhisperSTT(config=config),
         tts=KokoroTTS(config=config),
         turn_detection=MultilingualModel() if config["agent"]["use_eou"] else NOT_GIVEN,
-        resume_false_interruption=False,
     )
     logger.info("AgentSession created.")
 
