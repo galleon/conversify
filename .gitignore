@@ -9,3 +9,25 @@ conversify/data/memory_store/*
 conversify/data/models_cache/*
 KMS/
 conversify.egg-info/
+
+# Test and cache files
+**/test_cache/
+test_cache/
+*.cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Quality tool outputs
+bandit-report.json
+.coverage
+htmlcov/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

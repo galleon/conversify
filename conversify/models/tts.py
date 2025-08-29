@@ -4,15 +4,14 @@ from typing import Any, cast
 
 import httpx
 import openai
-
 from livekit.agents import (
     APIConnectionError,
     APIConnectOptions,
     APIStatusError,
     APITimeoutError,
+    tts,
     utils,
 )
-from livekit.agents import tts
 from livekit.agents.types import (
     DEFAULT_API_CONNECT_OPTIONS,
     NOT_GIVEN,
@@ -20,7 +19,7 @@ from livekit.agents.types import (
 )
 from livekit.agents.utils import is_given
 
-from .utils import TTSModels, TTSVoices, find_time
+from .utils import FindTime, TTSModels, TTSVoices
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class KokoroTTSStream(tts.ChunkedStream):
         conn_options: APIConnectOptions,
     ) -> None:
         super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
-        # copy options so per-stream mutations (if any) don’t affect the TTS instance
+        # copy options so per-stream mutations (if any) don't affect the TTS instance
         self._opts = replace(tts._opts)
         self._client = tts._client
 
@@ -135,7 +134,7 @@ class KokoroTTSStream(tts.ChunkedStream):
         )
 
         try:
-            with find_time("TTS_inferencing"):
+            with FindTime("TTS_inferencing"):
                 async with self._client.audio.speech.with_streaming_response.create(
                     input=self._input_text,
                     model=cast(Any, self._opts.model),
@@ -144,7 +143,7 @@ class KokoroTTSStream(tts.ChunkedStream):
                     speed=self._opts.speed,
                     timeout=httpx.Timeout(30, connect=self._conn_options.timeout),
                 ) as stream:
-                    # tell LiveKit about the stream we’re about to push
+                    # tell LiveKit about the stream we're about to push
                     output_emitter.initialize(
                         request_id=request_id,
                         sample_rate=self._tts.sample_rate,
@@ -160,7 +159,10 @@ class KokoroTTSStream(tts.ChunkedStream):
             raise APITimeoutError() from None
         except openai.APIStatusError as e:
             raise APIStatusError(
-                e.message, status_code=e.status_code, request_id=e.request_id, body=e.body
+                e.message,
+                status_code=e.status_code,
+                request_id=e.request_id,
+                body=e.body,
             ) from None
         except Exception:
             raise APIConnectionError() from None

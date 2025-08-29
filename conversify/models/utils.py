@@ -1,12 +1,11 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Literal, Any
-import time
-import logging
-import os
-from collections import OrderedDict
 
 import base64
+import logging
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 from livekit.agents import llm
 from livekit.agents.log import logger
@@ -17,32 +16,24 @@ from openai.types.chat import (
 )
 
 # Speech-to-Text model types
-WhisperModels = Literal[
-    "deepdml/faster-whisper-large-v3-turbo-ct2",
-]
+WhisperModels = Literal["deepdml/faster-whisper-large-v3-turbo-ct2",]
 
 # Text-to-Speech model types
-TTSModels = Literal[
-    "tts-1", 
-]
+TTSModels = Literal["tts-1",]
 
 # Text-to-Speech voice options
-TTSVoices = Literal[
-    "af_heart",
-    "af_bella"
-]
+TTSVoices = Literal["af_heart", "af_bella"]
 
 # Chat model types
-ChatModels = Literal[
-    'gpt'
-]
+ChatModels = Literal["gpt"]
 
 
-class find_time:
+class FindTime:
     """A context manager for timing code execution and logging the elapsed time."""
+
     def __init__(self, label: str):
         """Initialize a timer with a descriptive label.
-        
+
         Args:
             label: A descriptive name for what is being timed
         """
@@ -61,10 +52,10 @@ class find_time:
 
 def to_fnc_ctx(fnc_ctx: list[llm.FunctionTool]) -> list[ChatCompletionToolParam]:
     """Convert LiveKit function tools to OpenAI tool parameters.
-    
+
     Args:
         fnc_ctx: List of LiveKit function tools
-        
+
     Returns:
         List of OpenAI tool parameters
     """
@@ -74,16 +65,17 @@ def to_fnc_ctx(fnc_ctx: list[llm.FunctionTool]) -> list[ChatCompletionToolParam]
 @dataclass
 class _ChatItemGroup:
     """Groups related chat items for conversion to OpenAI chat items."""
+
     message: llm.ChatMessage | None = None
     tool_calls: list[llm.FunctionCall] = field(default_factory=list)
     tool_outputs: list[llm.FunctionCallOutput] = field(default_factory=list)
 
     def add(self, item: llm.ChatItem) -> _ChatItemGroup:
         """Add a chat item to this group.
-        
+
         Args:
             item: Chat item to add
-            
+
         Returns:
             This item group for chaining
         """
@@ -98,15 +90,17 @@ class _ChatItemGroup:
 
     def to_chat_items(self, cache_key: Any) -> list[ChatCompletionMessageParam]:
         """Convert this group to OpenAI chat items.
-        
+
         Args:
             cache_key: Cache key for image caching
-            
+
         Returns:
             List of OpenAI chat items
         """
         tool_calls = {tool_call.call_id: tool_call for tool_call in self.tool_calls}
-        tool_outputs = {tool_output.call_id: tool_output for tool_output in self.tool_outputs}
+        tool_outputs = {
+            tool_output.call_id: tool_output for tool_output in self.tool_outputs
+        }
 
         valid_tools = set(tool_calls.keys()) & set(tool_outputs.keys())
         # remove invalid tool calls and tool outputs
@@ -115,7 +109,10 @@ class _ChatItemGroup:
                 if tool_call.call_id not in valid_tools:
                     logger.warning(
                         "function call missing the corresponding function output, ignoring",
-                        extra={"call_id": tool_call.call_id, "tool_name": tool_call.name},
+                        extra={
+                            "call_id": tool_call.call_id,
+                            "tool_name": tool_call.name,
+                        },
                     )
                     tool_calls.pop(tool_call.call_id)
 
@@ -123,7 +120,10 @@ class _ChatItemGroup:
                 if tool_output.call_id not in valid_tools:
                     logger.warning(
                         "function output missing the corresponding function call, ignoring",
-                        extra={"call_id": tool_output.call_id, "tool_name": tool_output.name},
+                        extra={
+                            "call_id": tool_output.call_id,
+                            "tool_name": tool_output.name,
+                        },
                     )
                     tool_outputs.pop(tool_output.call_id)
 
@@ -142,7 +142,10 @@ class _ChatItemGroup:
                 {
                     "id": tool_call.call_id,
                     "type": "function",
-                    "function": {"name": tool_call.name, "arguments": tool_call.arguments},
+                    "function": {
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                    },
                 }
             )
         items = [msg]
@@ -151,23 +154,27 @@ class _ChatItemGroup:
         return items
 
 
-def to_chat_ctx(chat_ctx: llm.ChatContext, cache_key: Any) -> list[ChatCompletionMessageParam]:
+def to_chat_ctx(
+    chat_ctx: llm.ChatContext, cache_key: Any
+) -> list[ChatCompletionMessageParam]:
     """Convert a LiveKit chat context to OpenAI chat messages.
-    
+
     OpenAI requires the tool calls to be followed by the corresponding tool outputs.
     We group them first and remove invalid tool calls and outputs before converting.
-    
+
     Args:
         chat_ctx: LiveKit chat context
         cache_key: Cache key for image caching
-        
+
     Returns:
         List of OpenAI chat messages
     """
     item_groups: dict[str, _ChatItemGroup] = OrderedDict()  # item_id to group of items
     tool_outputs: list[llm.FunctionCallOutput] = []
     for item in chat_ctx.items:
-        if (item.type == "message" and item.role == "assistant") or item.type == "function_call":
+        if (
+            item.type == "message" and item.role == "assistant"
+        ) or item.type == "function_call":
             # only assistant messages and function calls can be grouped
             group_id = item.id.split("/")[0]
             if group_id not in item_groups:
@@ -181,7 +188,9 @@ def to_chat_ctx(chat_ctx: llm.ChatContext, cache_key: Any) -> list[ChatCompletio
 
     # add tool outputs to their corresponding groups
     call_id_to_group: dict[str, _ChatItemGroup] = {
-        tool_call.call_id: group for group in item_groups.values() for tool_call in group.tool_calls
+        tool_call.call_id: group
+        for group in item_groups.values()
+        for tool_call in group.tool_calls
     }
     for tool_output in tool_outputs:
         if tool_output.call_id not in call_id_to_group:
@@ -201,11 +210,11 @@ def to_chat_ctx(chat_ctx: llm.ChatContext, cache_key: Any) -> list[ChatCompletio
 
 def _to_chat_item(msg: llm.ChatItem, cache_key: Any) -> ChatCompletionMessageParam:
     """Convert a LiveKit chat item to an OpenAI chat message.
-    
+
     Args:
         msg: LiveKit chat item
         cache_key: Cache key for image caching
-        
+
     Returns:
         OpenAI chat message
     """
@@ -259,13 +268,15 @@ def _to_chat_item(msg: llm.ChatItem, cache_key: Any) -> ChatCompletionMessagePar
         }
 
 
-def _to_image_content(image: llm.ImageContent, cache_key: Any) -> ChatCompletionContentPartParam:
+def _to_image_content(
+    image: llm.ImageContent, cache_key: Any
+) -> ChatCompletionContentPartParam:
     """Convert a LiveKit image to an OpenAI image content part.
-    
+
     Args:
         image: LiveKit image content
         cache_key: Cache key for image caching
-        
+
     Returns:
         OpenAI image content part
     """

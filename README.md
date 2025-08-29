@@ -1,6 +1,7 @@
 # Conversify 🗣️ ✨
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assistant built on LiveKit. This project demonstrates highly responsive conversational AI workflows, leveraging locally hosted models.
 
@@ -52,7 +53,7 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
 
     ```bash
     uv pip install -e .
-    python -m conversify.main download-files 
+    python -m conversify.main download-files
     ```
 
 4. **Configure environment variables**
@@ -79,6 +80,73 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
     ```bash
     uv pip install -e ".[openai-whisper]"
     ```
+
+---
+
+## 🧑‍💻 Development Workflow
+
+For detailed development instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+### Quick Start for Developers
+
+```bash
+# Setup development environment
+make dev-setup
+
+# Run quality checks
+make quality
+
+# Format code
+make format
+
+# Run tests
+make test
+```
+
+### Available Make Commands
+
+- `make install` - Install production dependencies
+- `make install-dev` - Install development dependencies
+- `make setup-hooks` - Setup pre-commit hooks for automatic quality checks
+- `make format` - Auto-format code with Ruff
+- `make lint` - Run linting checks
+- `make test` - Run all tests
+- `make quality` - Run comprehensive quality checks (linting, formatting, tests)
+- `make clean` - Clean up temporary files
+- `make run-app` - Start the application
+
+### Code Quality Tools
+
+This project uses **Ruff** for fast Python linting and formatting:
+
+- **Linting**: Checks for code issues, imports, and style violations
+- **Formatting**: Automatically formats code to consistent style
+- **Pre-commit hooks**: Runs checks automatically before commits
+
+#### Manual Quality Commands
+
+```bash
+# Check code quality
+ruff check .
+
+# Auto-fix issues
+ruff check . --fix
+
+# Format code
+ruff format .
+
+# Run all quality checks
+./scripts/quality.sh
+```
+
+### Contributing
+
+When contributing to this project:
+
+1. Follow the code quality standards enforced by Ruff
+2. Run `make quality` before submitting changes
+3. Use conventional commit messages
+4. See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed guidelines
 
 ---
 
@@ -209,4 +277,3 @@ conversify/
 ## 📜 License
 
 This project is released under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
-

@@ -1,28 +1,28 @@
 import dataclasses
+import io
 import logging
 import os
+import platform
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import soundfile as sf
-
 from livekit import rtc
 from livekit.agents import (
     APIConnectionError,
     APIConnectOptions,
     stt,
 )
-from livekit.agents.types import NotGivenOr, NOT_GIVEN
+from livekit.agents.types import NOT_GIVEN, NotGivenOr
 from livekit.agents.utils import AudioBuffer
 
-from .utils import WhisperModels, find_time
-import platform
-import io
+from .utils import FindTime, WhisperModels
 
 # Import both whisper implementations
 try:
     from faster_whisper import WhisperModel
+
     FASTER_WHISPER_AVAILABLE = True
 except ImportError:
     FASTER_WHISPER_AVAILABLE = False
@@ -30,6 +30,7 @@ except ImportError:
 
 try:
     import whisper  # type: ignore
+
     OPENAI_WHISPER_AVAILABLE = True
 except ImportError:
     OPENAI_WHISPER_AVAILABLE = False
@@ -37,9 +38,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class WhisperOptions:
     """Configuration options for WhisperSTT."""
+
     language: str
     model: WhisperModels | str
     backend: str = "faster-whisper"  # "faster-whisper" or "openai"
@@ -61,10 +64,7 @@ class WhisperOptions:
 class WhisperSTT(stt.STT):
     """STT implementation using Whisper model."""
 
-    def __init__(
-        self,
-        config: dict[str, Any]
-    ):
+    def __init__(self, config: dict[str, Any]):
         """Initialize the WhisperSTT instance.
 
         Args:
@@ -74,15 +74,15 @@ class WhisperSTT(stt.STT):
             capabilities=stt.STTCapabilities(streaming=False, interim_results=False)
         )
 
-        stt_config = config['stt']['whisper']
+        stt_config = config["stt"]["whisper"]
 
-        language = stt_config['language']
-        model = stt_config['model']
-        backend = stt_config.get('backend', 'faster-whisper')
-        device = stt_config['device']
-        compute_type = stt_config['compute_type']
-        model_cache_directory = stt_config['model_cache_directory']
-        warmup_audio = stt_config['warmup_audio']
+        language = stt_config["language"]
+        model = stt_config["model"]
+        backend = stt_config.get("backend", "faster-whisper")
+        device = stt_config["device"]
+        compute_type = stt_config["compute_type"]
+        model_cache_directory = stt_config["model_cache_directory"]
+        warmup_audio = stt_config["warmup_audio"]
 
         self._opts = WhisperOptions(
             language=language,
@@ -91,16 +91,22 @@ class WhisperSTT(stt.STT):
             device=device,
             compute_type=compute_type,
             model_cache_directory=model_cache_directory,
-            warmup_audio=warmup_audio
+            warmup_audio=warmup_audio,
         )
 
         # Validate backend availability
         if self._opts.backend == "faster-whisper" and not FASTER_WHISPER_AVAILABLE:
-            raise ImportError("faster-whisper is not available. Install it with: pip install faster-whisper")
+            raise ImportError(
+                "faster-whisper is not available. Install it with: pip install faster-whisper"
+            )
         elif self._opts.backend == "openai" and not OPENAI_WHISPER_AVAILABLE:
-            raise ImportError("openai-whisper is not available. Install it with: pip install openai-whisper")
+            raise ImportError(
+                "openai-whisper is not available. Install it with: pip install openai-whisper"
+            )
         elif self._opts.backend not in ["faster-whisper", "openai"]:
-            raise ValueError(f"Unsupported backend: {self._opts.backend}. Use 'faster-whisper' or 'openai'")
+            raise ValueError(
+                f"Unsupported backend: {self._opts.backend}. Use 'faster-whisper' or 'openai'"
+            )
 
         self._model = None
         self._initialize_model()
@@ -114,8 +120,8 @@ class WhisperSTT(stt.STT):
             return device_cfg
         # Correct Apple Silicon detection
         try:
-            sys_name = platform.system()      # "Darwin" on macOS
-            arch = platform.machine()         # "arm64" on Apple Silicon
+            sys_name = platform.system()  # "Darwin" on macOS
+            arch = platform.machine()  # "arm64" on Apple Silicon
         except Exception:
             return "cpu"
         if sys_name == "Darwin" and arch in ("arm64", "aarch64"):
@@ -155,7 +161,8 @@ class WhisperSTT(stt.STT):
         # Ensure cache directories exist
         model_cache_dir = (
             os.path.expanduser(self._opts.model_cache_directory)
-            if self._opts.model_cache_directory else None
+            if self._opts.model_cache_directory
+            else None
         )
 
         if model_cache_dir:
@@ -186,7 +193,8 @@ class WhisperSTT(stt.STT):
         # Ensure cache directories exist
         model_cache_dir = (
             os.path.expanduser(self._opts.model_cache_directory)
-            if self._opts.model_cache_directory else None
+            if self._opts.model_cache_directory
+            else None
         )
 
         if model_cache_dir:
@@ -205,7 +213,7 @@ class WhisperSTT(stt.STT):
         """
         logger.info(f"Starting STT engine warmup using {warmup_audio_path}...")
         try:
-            with find_time('STT_warmup'):
+            with FindTime("STT_warmup"):
                 audio, _ = sf.read(warmup_audio_path, dtype="float32")
                 if audio.ndim > 1:
                     audio = np.mean(audio, axis=1)
@@ -306,10 +314,10 @@ class WhisperSTT(stt.STT):
 
             # Parse WAV from bytes (don't np.frombuffer raw!)
             audio, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32")
-            if audio.ndim > 1:               # downmix to mono
+            if audio.ndim > 1:  # downmix to mono
                 audio = np.mean(audio, axis=1)
 
-            with find_time('STT_inference'):
+            with FindTime("STT_inference"):
                 if self._opts.backend == "faster-whisper":
                     if self._model is None:
                         raise RuntimeError("Faster-whisper model not initialized")
@@ -320,7 +328,9 @@ class WhisperSTT(stt.STT):
                         best_of=self._opts.best_of,
                         condition_on_previous_text=self._opts.condition_on_previous_text,
                         vad_filter=self._opts.vad_filter,
-                        vad_parameters={"min_silence_duration_ms": self._opts.vad_min_silence_ms},
+                        vad_parameters={
+                            "min_silence_duration_ms": self._opts.vad_min_silence_ms
+                        },
                         word_timestamps=self._opts.word_timestamps,
                         initial_prompt=self._opts.initial_prompt,
                     )
@@ -337,10 +347,16 @@ class WhisperSTT(stt.STT):
                         word_timestamps=self._opts.word_timestamps,
                         initial_prompt=self._opts.initial_prompt,
                     )
-                    full_text = result.get("text", "").strip() if isinstance(result, dict) else ""
+                    full_text = (
+                        result.get("text", "").strip()
+                        if isinstance(result, dict)
+                        else ""
+                    )
             return stt.SpeechEvent(
                 type=stt.SpeechEventType.FINAL_TRANSCRIPT,
-                alternatives=[stt.SpeechData(text=full_text or "", language=options.language)],
+                alternatives=[
+                    stt.SpeechData(text=full_text or "", language=options.language)
+                ],
             )
         except Exception as e:
             logger.error(f"Error in speech recognition: {e}", exc_info=True)
