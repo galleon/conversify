@@ -58,7 +58,7 @@ class WhisperSTT(stt.STT):
             capabilities=stt.STTCapabilities(streaming=False, interim_results=False)
         )
 
-        stt_config = config['stt']['whisper']
+        stt_config = config['stt']['local']
 
         language = stt_config['language']
         model = stt_config['model']
