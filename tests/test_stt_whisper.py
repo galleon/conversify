@@ -55,7 +55,7 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
 
     config = {
         "stt": {
-            "whisper": {
+            "local": {
                 "language": "en",
                 "model": "small",
                 "device": None,

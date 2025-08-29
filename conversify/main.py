@@ -39,6 +39,7 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from conversify.models.tts import KokoroTTS
 from conversify.models.stt import WhisperSTT
+from conversify.models.stt_openai import OpenAIWhisperSTT
 from conversify.models.llm import OpenaiLLM
 from conversify.core.vision import video_processing_loop
 from conversify.core.agent import ConversifyAgent
@@ -97,10 +98,19 @@ async def entrypoint(ctx: JobContext, config: dict[str, Any]):
         return
 
     # Setup the AgentSession with configured plugins
+    stt_provider = config['stt']['provider']
+    stt_service = None
+    if stt_provider == 'local':
+        stt_service = WhisperSTT(config=config)
+    elif stt_provider == 'openai':
+        stt_service = OpenAIWhisperSTT(config=config)
+    else:
+        raise ValueError(f"Unsupported STT provider: {stt_provider}")
+
     session = AgentSession(
         vad=vad,
         llm=OpenaiLLM(client=llm_client, config=config),
-        stt=WhisperSTT(config=config),
+        stt=stt_service,
         tts=KokoroTTS(config=config),
         turn_detection=MultilingualModel() if config['agent']['use_eou'] else NOT_GIVEN,
         resume_false_interruption=False,

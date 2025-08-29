@@ -10,7 +10,12 @@ use_background_noise_removal = true            # uses Krisp BVC noise cancellati
 use_background_audio = false                   # plays office background audio while agent speaks
 allow_interruptions = true                     # reset tts on user interruption
 
-[stt.whisper]
+[stt]
+# Select the STT provider to use. Can be "local" or "openai".
+provider = "openai"
+
+# Configuration for the local STT provider (faster-whisper)
+[stt.local]
 language = "en"
 model = "deepdml/faster-whisper-large-v3-turbo-ct2"
 device = "cpu"
@@ -18,19 +23,34 @@ compute_type = "auto"                          # "int8_float16"
 model_cache_directory = "conversify/data/models_cache"
 warmup_audio = "conversify/data/warmup_audio.wav"
 
+# Configuration for the OpenAI STT provider
+[stt.openai]
+api_key = "YOUR_OPENAI_API_KEY" # Replace with your key or set in .env.local
+language = "en"
+model = "whisper-1"
+
+# [llm]
+# The LLM (Large Language Model) service is configured to use a hosted
+# OpenAI-compatible API. The `base_url` should point to your service provider's
+# API endpoint. The `api_key` should be stored in the .env.local file.
 [llm]
-base_url = "http://ollama:11434/v1"
-api_key = "ollama"
-model = "qwen2.5vl"
+base_url = "https://api.openai.com/v1"
+api_key = "YOUR_OPENAI_API_KEY" # Replace with your key or set in .env.local
+model = "gpt-4o"
 temperature = 0.4
 parallel_tool_calls = false
 tool_choice = "auto"
 
+# [tts.kokoro]
+# The TTS (Text-to-Speech) service is configured to use a hosted
+# OpenAI-compatible API. Although the section is named `kokoro`, it uses a
+# standard OpenAI client and can be pointed to any compatible service.
+# The `api_key` should be stored in the .env.local file.
 [tts.kokoro]
-base_url = "http://kokoro:8880/v1"
-api_key = "NULL"
+base_url = "https://api.openai.com/v1"
+api_key = "YOUR_OPENAI_API_KEY" # Replace with your key or set in .env.local
 model = "tts-1"
-voice = "af_heart"
+voice = "alloy" # OpenAI voices: alloy, echo, fable, onyx, nova, shimmer
 speed = 1.0
 
 [vad]
