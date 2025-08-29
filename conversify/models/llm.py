@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 import httpx
-
 import openai
 from livekit.agents import APIConnectionError, APIStatusError, APITimeoutError, llm
 from livekit.agents.llm import ToolChoice, utils as llm_utils
@@ -39,7 +37,7 @@ class _LLMOptions:
 class OpenaiLLM(llm.LLM):
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         client: openai.AsyncClient | None = None,
     ) -> None:
         """
@@ -50,30 +48,25 @@ class OpenaiLLM(llm.LLM):
             config: Configuration dictionary (from config.yaml)
         """
         super().__init__()
-        
-        llm_config = config['llm']
-        
-        model = llm_config['model']
-        api_key = llm_config['api_key']
-        base_url = llm_config['base_url']
-        temperature = llm_config['temperature']
-        parallel_tool_calls = llm_config['parallel_tool_calls']
-        tool_choice = llm_config['tool_choice']
-        
-        timeout = httpx.Timeout(
-            connect=15.0,
-            read=5.0,
-            write=5.0,
-            pool=5.0
-        )
-        
+
+        llm_config = config["llm"]
+
+        model = llm_config["model"]
+        api_key = llm_config["api_key"]
+        base_url = llm_config["base_url"]
+        temperature = llm_config["temperature"]
+        parallel_tool_calls = llm_config["parallel_tool_calls"]
+        tool_choice = llm_config["tool_choice"]
+
+        timeout = httpx.Timeout(connect=15.0, read=5.0, write=5.0, pool=5.0)
+
         self._opts = _LLMOptions(
             model=model,
             temperature=temperature,
             parallel_tool_calls=parallel_tool_calls,
             tool_choice=tool_choice,
         )
-        
+
         # Use the provided client or create a new one with configured settings
         self._client = client or openai.AsyncClient(
             api_key=api_key,
@@ -89,7 +82,7 @@ class OpenaiLLM(llm.LLM):
                 ),
             ),
         )
-  
+
     def chat(
         self,
         *,
@@ -108,7 +101,9 @@ class OpenaiLLM(llm.LLM):
             extra.update(extra_kwargs)
 
         parallel_tool_calls = (
-            parallel_tool_calls if is_given(parallel_tool_calls) else self._opts.parallel_tool_calls
+            parallel_tool_calls
+            if is_given(parallel_tool_calls)
+            else self._opts.parallel_tool_calls
         )
         if is_given(parallel_tool_calls):
             extra["parallel_tool_calls"] = parallel_tool_calls
@@ -127,7 +122,9 @@ class OpenaiLLM(llm.LLM):
                 extra["tool_choice"] = oai_tool_choice
 
         if is_given(response_format):
-            extra["response_format"] = llm_utils.to_openai_response_format(response_format)
+            extra["response_format"] = llm_utils.to_openai_response_format(
+                response_format
+            )
 
         return LLMStream(
             self,
@@ -143,7 +140,7 @@ class OpenaiLLM(llm.LLM):
 class LLMStream(llm.LLMStream):
     def __init__(
         self,
-        llm: LLM,
+        llm: OpenaiLLM,
         *,
         model: str,
         client: openai.AsyncClient,
@@ -189,7 +186,9 @@ class LLMStream(llm.LLMStream):
                     if chunk.usage is not None:
                         retryable = False
                         tokens_details = chunk.usage.prompt_tokens_details
-                        cached_tokens = tokens_details.cached_tokens if tokens_details else 0
+                        cached_tokens = (
+                            tokens_details.cached_tokens if tokens_details else 0
+                        )
                         chunk = llm.ChatChunk(
                             id=chunk.id,
                             usage=llm.CompletionUsage(

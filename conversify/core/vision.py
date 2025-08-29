@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Any
 
 from livekit import rtc
 from livekit.agents import JobContext
@@ -8,27 +8,29 @@ from livekit.agents import JobContext
 logger = logging.getLogger(__name__)
 
 
-async def find_video_track(ctx: JobContext) -> Optional[rtc.RemoteVideoTrack]:
+async def find_video_track(ctx: JobContext) -> rtc.RemoteVideoTrack | None:
     """
     Find and subscribe to the first available video track in the room.
-    
+
     Args:
         ctx: The job context containing room information
-        
+
     Returns:
         The first available RemoteVideoTrack or None if no track is found
     """
     for participant in ctx.room.remote_participants.values():
         if not participant or not participant.track_publications:
             continue
-            
+
         for track_pub in participant.track_publications.values():
             if not track_pub or track_pub.kind != rtc.TrackKind.KIND_VIDEO:
                 continue
-                
+
             # Attempt to subscribe if not already subscribed
             if not track_pub.subscribed:
-                logger.info(f"Subscribing to video track {track_pub.sid} from {participant.identity}...")
+                logger.info(
+                    f"Subscribing to video track {track_pub.sid} from {participant.identity}..."
+                )
                 try:
                     track_pub.set_subscribed(True)
                     # Wait for subscription to complete
@@ -36,21 +38,27 @@ async def find_video_track(ctx: JobContext) -> Optional[rtc.RemoteVideoTrack]:
                 except Exception as e:
                     logger.warning(f"Failed to subscribe to track {track_pub.sid}: {e}")
                     continue
-            
+
             # Check if track is available after subscription
-            if (track_pub.track and 
-                isinstance(track_pub.track, rtc.RemoteVideoTrack) and 
-                track_pub.subscribed):
-                logger.info(f"Found video track: {track_pub.track.sid} from {participant.identity}")
+            if (
+                track_pub.track
+                and isinstance(track_pub.track, rtc.RemoteVideoTrack)
+                and track_pub.subscribed
+            ):
+                logger.info(
+                    f"Found video track: {track_pub.track.sid} from {participant.identity}"
+                )
                 return track_pub.track
-    
+
     return None
 
 
-async def video_processing_loop(ctx: JobContext, shared_state: Dict[str, Any], video_frame_interval: float) -> None:
+async def video_processing_loop(
+    ctx: JobContext, shared_state: dict[str, Any], video_frame_interval: float
+) -> None:
     """
     Process the first available video track and update shared_state['latest_image'].
-    
+
     Args:
         ctx: The job context containing room information
         shared_state: Dictionary to store shared data between components
@@ -63,14 +71,14 @@ async def video_processing_loop(ctx: JobContext, shared_state: Dict[str, Any], v
     logger.info("Starting video processing loop, looking for video track...")
     video_track = None
     video_stream = None
-    
+
     try:
         while True:
             try:
                 video_track = await find_video_track(ctx)
                 if video_track:
                     break
-                    
+
                 logger.debug("No video track found yet, waiting...")
                 await asyncio.sleep(1)
             except asyncio.CancelledError:
@@ -82,17 +90,19 @@ async def video_processing_loop(ctx: JobContext, shared_state: Dict[str, Any], v
 
         # Create video stream from the found track
         video_stream = rtc.VideoStream(video_track)
-        logger.info(f"Starting video stream processing with interval {video_frame_interval}s.")
-        
+        logger.info(
+            f"Starting video stream processing with interval {video_frame_interval}s."
+        )
+
         # Process the video stream
         async for event in video_stream:
             if event and event.frame:
                 # Update the shared state with the latest frame
-                shared_state['latest_image'] = event.frame
-                
+                shared_state["latest_image"] = event.frame
+
             # Sleep to control processing rate
             await asyncio.sleep(video_frame_interval)
-            
+
     except asyncio.CancelledError:
         logger.info("Video processing task cancelled.")
     except Exception as e:
@@ -105,7 +115,7 @@ async def video_processing_loop(ctx: JobContext, shared_state: Dict[str, Any], v
                 logger.info("Video stream closed.")
             except Exception as e:
                 logger.error(f"Error closing video stream: {e}")
-        
+
         # Clear the latest image reference when processing ends
-        shared_state.pop('latest_image', None)
-        logger.info("Video processing loop ended.") 
+        shared_state.pop("latest_image", None)
+        logger.info("Video processing loop ended.")

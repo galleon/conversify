@@ -1,25 +1,26 @@
 import logging
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-from pydantic import BaseModel, Field
-
-from memoripy import MemoryManager, JSONStorage, ChatModel, EmbeddingModel
-
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from livekit.agents import ChatMessage, ChatContext
+from livekit.agents import ChatContext, ChatMessage
+from memoripy import ChatModel, EmbeddingModel, JSONStorage, MemoryManager
 from openai import OpenAI
-
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
 class ConceptExtractionResponse(BaseModel):
     """Model for structured response from concept extraction."""
-    concepts: list[str] = Field(description="list of key concepts extracted from the text.")
+
+    concepts: list[str] = Field(
+        description="list of key concepts extracted from the text."
+    )
 
 
 class ChatCompletionsModel(ChatModel):
@@ -32,18 +33,20 @@ class ChatCompletionsModel(ChatModel):
         Args:
             llm_config: dictionary containing LLM configuration (base_url, api_key, model)
         """
-        api_endpoint = llm_config['base_url']
-        api_key = llm_config['api_key']
-        model_name = llm_config['model']
+        api_endpoint = llm_config["base_url"]
+        api_key = llm_config["api_key"]
+        model_name = llm_config["model"]
 
-        logger.info(f"Initializing ChatCompletionsModel with endpoint: {api_endpoint}, model: {model_name}")
+        logger.info(
+            f"Initializing ChatCompletionsModel with endpoint: {api_endpoint}, model: {model_name}"
+        )
         try:
             self.llm = ChatOpenAI(
                 openai_api_base=api_endpoint,
                 openai_api_key=api_key,
                 model_name=model_name,
                 request_timeout=30.0,
-                max_retries=2
+                max_retries=2,
             )
             self.parser = JsonOutputParser(pydantic_object=ConceptExtractionResponse)
             self.prompt_template = PromptTemplate(
@@ -54,11 +57,16 @@ class ChatCompletionsModel(ChatModel):
                     "{format_instructions}\n{text}"
                 ),
                 input_variables=["text"],
-                partial_variables={"format_instructions": self.parser.get_format_instructions()},
+                partial_variables={
+                    "format_instructions": self.parser.get_format_instructions()
+                },
             )
             logger.info("ChatCompletionsModel initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to initialize ChatCompletionsModel components: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize ChatCompletionsModel components: {e}",
+                exc_info=True,
+            )
             raise
 
     def invoke(self, messages: list[dict[str, Any]]) -> str:
@@ -72,14 +80,22 @@ class ChatCompletionsModel(ChatModel):
             Response content as a string
         """
         if not messages:
-            logger.warning("Empty messages list provided to ChatCompletionsModel.invoke()")
+            logger.warning(
+                "Empty messages list provided to ChatCompletionsModel.invoke()"
+            )
             return ""
 
         try:
             response = self.llm.invoke(messages)
-            return str(response.content) if response and hasattr(response, 'content') else ""
+            return (
+                str(response.content)
+                if response and hasattr(response, "content")
+                else ""
+            )
         except Exception as e:
-            logger.error(f"Error during ChatCompletionsModel invocation: {e}", exc_info=True)
+            logger.error(
+                f"Error during ChatCompletionsModel invocation: {e}", exc_info=True
+            )
             return "Error processing request."
 
     def extract_concepts(self, text: str) -> list[str]:
@@ -93,7 +109,9 @@ class ChatCompletionsModel(ChatModel):
             list of extracted concept strings
         """
         if not text or not isinstance(text, str) or not text.strip():
-            logger.warning("Empty or whitespace-only text provided to extract_concepts()")
+            logger.warning(
+                "Empty or whitespace-only text provided to extract_concepts()"
+            )
             return []
 
         try:
@@ -138,8 +156,7 @@ class OllamaEmbeddingModel(EmbeddingModel):
         """
         try:
             resp = self.client.embeddings.create(
-                model=self.model,
-                input="dimension_check"
+                model=self.model, input="dimension_check"
             )
             vec = resp.data[0].embedding
             self._dimension = len(vec)
@@ -197,40 +214,51 @@ class AgentMemoryManager:
         """
         self.participant_identity = participant_identity
         self.config = config
-        self.memory_config = config['memory']
+        self.memory_config = config["memory"]
         self.memory_manager = None
         self._initialize_memory_manager()
 
     def _initialize_memory_manager(self) -> None:
         """Initialize the Memoripy MemoryManager with model instances."""
-        if not self.memory_config['use']:
-            logger.info(f"Memory is disabled in config for {self.participant_identity}. Skipping initialization.")
+        if not self.memory_config["use"]:
+            logger.info(
+                f"Memory is disabled in config for {self.participant_identity}. Skipping initialization."
+            )
             return
 
-        memory_dir_abs = self.memory_config['dir_abs']
+        memory_dir_abs = self.memory_config["dir_abs"]
 
         # Ensure the directory exists
         os.makedirs(memory_dir_abs, exist_ok=True)
         logger.info(f"Ensuring memory directory exists: {memory_dir_abs}")
 
-        user_memory_file = os.path.join(memory_dir_abs, f"{self.participant_identity}.json")
+        user_memory_file = os.path.join(
+            memory_dir_abs, f"{self.participant_identity}.json"
+        )
 
-        llm_cfg = self.config['llm']
-        embedding_cfg = self.config['embedding']
+        llm_cfg = self.config["llm"]
+        embedding_cfg = self.config["embedding"]
 
         try:
             chat_model_instance = ChatCompletionsModel(llm_config=llm_cfg)
-            embedding_model_instance = OllamaEmbeddingModel(embedding_config=embedding_cfg)
+            embedding_model_instance = OllamaEmbeddingModel(
+                embedding_config=embedding_cfg
+            )
             embedding_model_instance.initialize_embedding_dimension()
 
             self.memory_manager = MemoryManager(
                 chat_model=chat_model_instance,
                 embedding_model=embedding_model_instance,
-                storage=JSONStorage(user_memory_file)
+                storage=JSONStorage(user_memory_file),
             )
-            logger.info(f"Initialized MemoryManager for user {self.participant_identity} with storage {user_memory_file}")
+            logger.info(
+                f"Initialized MemoryManager for user {self.participant_identity} with storage {user_memory_file}"
+            )
         except Exception as e:
-            logger.error(f"Failed to initialize MemoryManager components for {self.participant_identity}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize MemoryManager components for {self.participant_identity}: {e}",
+                exc_info=True,
+            )
             self.memory_manager = None
 
     async def load_memory(self, update_chat_ctx_func: Callable) -> None:
@@ -240,12 +268,16 @@ class AgentMemoryManager:
         Args:
             update_chat_ctx_func: Function to update chat context with loaded memory
         """
-        if not self.memory_config.get('use', False):
-            logger.info(f"Memory is disabled in config for {self.participant_identity}. Skipping load.")
+        if not self.memory_config.get("use", False):
+            logger.info(
+                f"Memory is disabled in config for {self.participant_identity}. Skipping load."
+            )
             return
 
         if not self.memory_manager:
-            logger.warning(f"MemoryManager not initialized for {self.participant_identity}. Cannot load history.")
+            logger.warning(
+                f"MemoryManager not initialized for {self.participant_identity}. Cannot load history."
+            )
             return
 
         initial_messages_from_memory = []
@@ -253,25 +285,42 @@ class AgentMemoryManager:
         try:
             short_term_history, _ = self.memory_manager.load_history()
             # Use config value for number of interactions
-            num_interactions_to_load = self.memory_config.get('load_last_n', 5)
-            memory_interactions = short_term_history[-num_interactions_to_load:] if short_term_history else []
+            num_interactions_to_load = self.memory_config.get("load_last_n", 5)
+            memory_interactions = (
+                short_term_history[-num_interactions_to_load:]
+                if short_term_history
+                else []
+            )
 
             for interaction in memory_interactions:
-                if interaction.get('prompt'):
-                    initial_messages_from_memory.append(ChatMessage(role="user", content=[interaction['prompt']]))
-                if interaction.get('output'):
-                    initial_messages_from_memory.append(ChatMessage(role="assistant", content=[interaction['output']]))
+                if interaction.get("prompt"):
+                    initial_messages_from_memory.append(
+                        ChatMessage(role="user", content=[interaction["prompt"]])
+                    )
+                if interaction.get("output"):
+                    initial_messages_from_memory.append(
+                        ChatMessage(role="assistant", content=[interaction["output"]])
+                    )
 
             if initial_messages_from_memory:
                 await update_chat_ctx_func(ChatContext(initial_messages_from_memory))
-                logger.info(f"Prepended {len(initial_messages_from_memory)} interactions to the initial context for {self.participant_identity}.")
+                logger.info(
+                    f"Prepended {len(initial_messages_from_memory)} interactions to the initial context for {self.participant_identity}."
+                )
             else:
-                logger.info(f"No interactions loaded from memory for {self.participant_identity}.")
+                logger.info(
+                    f"No interactions loaded from memory for {self.participant_identity}."
+                )
 
         except FileNotFoundError:
-            logger.info(f"No previous history file found for {self.participant_identity}. Starting fresh.")
+            logger.info(
+                f"No previous history file found for {self.participant_identity}. Starting fresh."
+            )
         except Exception as e:
-            logger.error(f"Failed to load history via Memoripy for {self.participant_identity}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to load history via Memoripy for {self.participant_identity}: {e}",
+                exc_info=True,
+            )
 
     def _extract_message_content(self, message: ChatMessage) -> str:
         """
@@ -293,7 +342,7 @@ class AgentMemoryManager:
             content_item = message.content[0]
             if isinstance(content_item, str):
                 return content_item
-            elif hasattr(content_item, 'text'):
+            elif hasattr(content_item, "text"):
                 return content_item.text
             else:
                 return str(content_item)
@@ -307,19 +356,27 @@ class AgentMemoryManager:
         Args:
             chat_ctx: ChatContext containing the conversation messages
         """
-        if not self.memory_config.get('use', False):
-            logger.info(f"Memory is disabled in config for {self.participant_identity}. Skipping save.")
+        if not self.memory_config.get("use", False):
+            logger.info(
+                f"Memory is disabled in config for {self.participant_identity}. Skipping save."
+            )
             return
 
         if self.memory_manager is None:
-            logger.warning(f"Memory manager not available for {self.participant_identity}. Skipping history save.")
+            logger.warning(
+                f"Memory manager not available for {self.participant_identity}. Skipping history save."
+            )
             return
 
         if not chat_ctx or not chat_ctx.items:
-            logger.info(f"No conversation items to save for {self.participant_identity}.")
+            logger.info(
+                f"No conversation items to save for {self.participant_identity}."
+            )
             return
 
-        logger.info(f"Saving conversation history via Memoripy for user: {self.participant_identity}")
+        logger.info(
+            f"Saving conversation history via Memoripy for user: {self.participant_identity}"
+        )
         logger.info(f"Conversation history messages count: {len(chat_ctx.items)}")
 
         i = 0
@@ -334,17 +391,19 @@ class AgentMemoryManager:
             if items[i].role == "user":
                 user_msg = items[i]
                 # Find the corresponding assistant message (if it exists)
-                if i + 1 < len(items) and items[i+1].role == "assistant":
-                    assistant_msg = items[i+1]
-                    i += 2 # Move past both
+                if i + 1 < len(items) and items[i + 1].role == "assistant":
+                    assistant_msg = items[i + 1]
+                    i += 2  # Move past both
                 else:
-                    i += 1 # Move past only user msg
+                    i += 1  # Move past only user msg
             elif items[i].role == "assistant":
                 # Skip assistant message without preceding user message
-                logger.warning(f"Skipping assistant message without preceding user message at index {i}")
+                logger.warning(
+                    f"Skipping assistant message without preceding user message at index {i}"
+                )
                 i += 1
                 continue
-            else: # Skip system messages etc.
+            else:  # Skip system messages etc.
                 i += 1
                 continue
 
@@ -352,7 +411,11 @@ class AgentMemoryManager:
             if user_msg:
                 # Extract content using helper method
                 user_prompt = self._extract_message_content(user_msg)
-                assistant_response = self._extract_message_content(assistant_msg) if assistant_msg else ""
+                assistant_response = (
+                    self._extract_message_content(assistant_msg)
+                    if assistant_msg
+                    else ""
+                )
 
                 combined_text = f"{user_prompt} {assistant_response}".strip()
 
@@ -367,14 +430,23 @@ class AgentMemoryManager:
                         prompt=user_prompt,
                         output=assistant_response,
                         embedding=embedding,
-                        concepts=concepts
+                        concepts=concepts,
                     )
                     processed_count += 1
-                    logger.debug(f"Added interaction to Memoripy: User: '{user_prompt[:50]}...' Assistant: '{assistant_response[:50]}...'")
+                    logger.debug(
+                        f"Added interaction to Memoripy: User: '{user_prompt[:50]}...' Assistant: '{assistant_response[:50]}...'"
+                    )
                 except Exception as e:
-                    logger.error(f"Error processing interaction via Memoripy: {e} for interaction: User='{user_prompt[:50]}...', Assistant='{assistant_response[:50]}...'", exc_info=True)
+                    logger.error(
+                        f"Error processing interaction via Memoripy: {e} for interaction: User='{user_prompt[:50]}...', Assistant='{assistant_response[:50]}...'",
+                        exc_info=True,
+                    )
 
         if processed_count > 0:
-            logger.info(f"Successfully added {processed_count} interactions into conversational memory for {self.participant_identity}")
+            logger.info(
+                f"Successfully added {processed_count} interactions into conversational memory for {self.participant_identity}"
+            )
         else:
-            logger.warning(f"No interactions were added to memory for {self.participant_identity}")
+            logger.warning(
+                f"No interactions were added to memory for {self.participant_identity}"
+            )

@@ -23,6 +23,10 @@ help:
 	@echo "  clean        Clean up temporary files"
 	@echo "  run-app      Start the conversify application"
 	@echo ""
+	@echo "Information Commands:"
+	@echo "  show-config     Show current tool versions"
+	@echo "  quality-summary Show quality setup summary"
+	@echo ""
 	@echo "Docker Commands:"
 	@echo "  docker-cpu   Run with Docker (CPU mode)"
 	@echo "  docker-gpu   Run with Docker (GPU mode)"
@@ -120,3 +124,22 @@ show-config:
 	@echo "UV: $(shell uv --version 2>/dev/null || echo 'Not installed')"
 	@echo "Ruff: $(shell .venv/bin/ruff --version 2>/dev/null || ruff --version 2>/dev/null || echo 'Not installed')"
 	@echo "Pre-commit: $(shell .venv/bin/pre-commit --version 2>/dev/null || pre-commit --version 2>/dev/null || echo 'Not installed')"
+
+quality-summary:
+	@echo "📊 Quality Tools Setup Summary"
+	@echo "=============================="
+	@if [ -f QUALITY_SETUP_SUMMARY.md ]; then \
+		echo ""; \
+		echo "See QUALITY_SETUP_SUMMARY.md for complete details"; \
+		echo ""; \
+		echo "Quick Status:"; \
+		echo "✅ Ruff: Fast linting and formatting"; \
+		echo "✅ Pre-commit: Automatic quality checks"; \
+		echo "✅ Make commands: Development workflow"; \
+		echo "✅ STT backends: Both faster-whisper and OpenAI"; \
+		echo "✅ Documentation: Comprehensive guides"; \
+		echo ""; \
+		echo "Run 'make quality' to verify everything works!"; \
+	else \
+		echo "❌ Quality setup summary not found"; \
+	fi

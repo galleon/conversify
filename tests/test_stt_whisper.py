@@ -19,7 +19,15 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
             self.text = text
 
     class FakeWhisperModel:
-        def __init__(self, model_size_or_path, device, compute_type, download_root, cpu_threads, num_workers):
+        def __init__(
+            self,
+            model_size_or_path,
+            device,
+            compute_type,
+            download_root,
+            cpu_threads,
+            num_workers,
+        ):
             # store for inspection if needed
             self.model_size_or_path = model_size_or_path
             self.device = device
@@ -30,7 +38,9 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
 
         def transcribe(self, audio, **kwargs):
             # Return a single segment "hello world"
-            return [FakeSegment("hello world")], SimpleNamespace(duration=0.2, language=kwargs.get("language"))
+            return [FakeSegment("hello world")], SimpleNamespace(
+                duration=0.2, language=kwargs.get("language")
+            )
 
     monkeypatch.setattr(mod, "WhisperModel", FakeWhisperModel)
 
@@ -42,7 +52,7 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
         bio = io.BytesIO()
         with wave.open(bio, "wb") as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)   # 16-bit PCM
+            wf.setsampwidth(2)  # 16-bit PCM
             wf.setframerate(sr)
             wf.writeframes(pcm.tobytes())
         return bio.getvalue()
@@ -51,7 +61,9 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
         def to_wav_bytes(self):
             return make_wav_bytes()
 
-    monkeypatch.setattr(mod.rtc, "combine_audio_frames", lambda _buffer: FakeCombinedFrames())
+    monkeypatch.setattr(
+        mod.rtc, "combine_audio_frames", lambda _buffer: FakeCombinedFrames()
+    )
 
     config = {
         "stt": {
@@ -73,7 +85,6 @@ async def test_whisperstt_transcribe_returns_text_on_mac(monkeypatch):
     assert stt_inst._default_device(None) == "metal"
 
     from livekit.agents import APIConnectOptions
-    from livekit.agents.types import NOT_GIVEN
 
     event = await stt_inst._recognize_impl(
         buffer=None,
