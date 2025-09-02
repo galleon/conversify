@@ -22,6 +22,17 @@ dependencies = [
     "memoripy>=0.1.2",
     "python-dotenv>=1.1.1",
     "soundfile>=0.13.1",
+    # FastAPI and server dependencies
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    # File processing dependencies
+    "PyPDF2>=3.0.0",
+    "python-docx>=1.1.0",
+    "docx2txt>=0.8",
+    "openpyxl>=3.1.0",
+    "xlrd>=2.0.0",
+    "striprtf>=0.0.26",
+    "python-multipart>=0.0.6",
 ]
 
 [project.optional-dependencies]

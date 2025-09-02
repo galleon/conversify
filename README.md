@@ -12,11 +12,13 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
 
 ## ✨ Key Features
 
-- ⚡ **Low Latency**: End-to-end response time under 600 ms.
+- ⚡ **Low Latency**: End-to-end response time under 600 ms.
 - 🗣️ **Real‑time Voice**: Natural conversation using local STT and TTS services.
 - 🧠 **Local LLM Integration**: Compatible with any OpenAI‑style API (e.g., SGLang, vLLM, Ollama).
 - 👀 **Basic Vision**: Processes video frames with multimodal LLM prompts.
 - 💾 **Conversational Memory**: Persists context across user sessions.
+- 🖥️ **Modern Web UI**: React-based avatar interface with real-time video/audio.
+- 🐳 **Docker Support**: Full containerization for easy deployment.
 - 🔧 **Configurable**: All settings managed via `config/config.yaml`.
 
 ---
@@ -25,6 +27,7 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
 
 - **OS**: Linux or WSL on Windows (tested)
 - **Python**: 3.11+
+- **Node.js**: 20+ (for Avatar UI)
 - **Services**:
   - LiveKit Server Cloud (sign up at https://cloud.livekit.io)
   - An LLM inference server with OpenAI-compatible API (e.g., SGLang, vLLM, Ollama)
@@ -47,6 +50,14 @@ Conversify is a real‑time, low‑latency, voice- and vision-enabled AI assista
     uv venv
     source .venv/bin/activate    # Linux/macOS
     # .venv\Scripts\activate   # Windows
+    ```
+
+3. **Install UI dependencies**
+
+    ```bash
+    make ui-install
+    # OR manually:
+    cd avatar-ui && pnpm install
     ```
 
 3. **Install dependencies**
@@ -114,6 +125,30 @@ make test
 - `make quality` - Run comprehensive quality checks (linting, formatting, tests)
 - `make clean` - Clean up temporary files
 - `make run-app` - Start the application
+- `make ui-install` - Install UI dependencies
+- `make ui-dev` - Start UI in development mode
+- `make ui-build` - Build UI for production
+- `make ui-docker` - Build and run UI with Docker
+
+### UI Development
+
+The Avatar UI is built with Next.js and React. For UI-specific development:
+
+```bash
+# Install UI dependencies
+make ui-install
+
+# Start development server (with hot reload)
+make ui-dev
+
+# Build for production
+make ui-build
+
+# View UI logs in Docker
+make ui-logs
+```
+
+The UI development server runs on http://localhost:3000 with hot reload enabled.
 
 ### Code Quality Tools
 
@@ -175,8 +210,21 @@ Ensure all external services are running before starting Conversify.
     ./scripts/run_app.sh
     ```
 
-4. **Interact via LiveKit Agents Playground**
+4. **Start the Avatar UI** (optional, for web interface)
 
+    ```bash
+    make ui-dev
+    # OR manually:
+    cd avatar-ui && pnpm dev
+    ```
+
+5. **Interact with the agent**
+
+    **Option A: Web UI (Recommended)**
+    - Open http://localhost:3000 in your browser
+    - Click "Start call" to begin conversation
+
+    **Option B: LiveKit Agents Playground**
     - Navigate to https://agents-playground.livekit.io
     - Select your LiveKit project and room
     - Join and begin conversation
@@ -185,7 +233,7 @@ Ensure all external services are running before starting Conversify.
 
 ## 🐳 Running with Docker
 
-This project includes a Docker setup to run the entire application stack in containers. This is the recommended way to run the application.
+This project includes a Docker setup to run the entire application stack in containers, including the Avatar UI web interface. This is the recommended way to run the application.
 
 ### Prerequisites
 
@@ -193,21 +241,55 @@ This project includes a Docker setup to run the entire application stack in cont
 - NVIDIA GPU with drivers (for GPU mode)
 - A `.env.local` file with your LiveKit credentials (see [Installation](#-installation))
 
-### Running in CPU Mode
+### Running in CPU Mode (Recommended)
 
-This mode is suitable for machines without a dedicated NVIDIA GPU, such as a MacBook.
+This mode is suitable for machines without a dedicated NVIDIA GPU, such as a MacBook. It includes all services plus the Avatar UI.
 
 ```bash
-docker-compose -f docker-compose.cpu.yml up --build
+# Run everything including UI
+docker compose -f docker-compose.cpu.yml up --build
+
+# Or run just specific services
+docker compose -f docker-compose.cpu.yml up --build conversify avatar-ui
 ```
+
+**✅ Build Issues Resolved**: The UI Docker build has been successfully fixed and tested. The docker-compose now uses `Dockerfile.simple` with optimized npm-based builds that handle network issues gracefully.
+
+**Access points:**
+- **Avatar UI**: http://localhost:3000 (recommended)
+- **Agent API**: http://localhost:8080
+- **Kokoro TTS**: http://localhost:8880
 
 ### Running in GPU Mode
 
-This mode provides the best performance by leveraging an NVIDIA GPU for the AI models.
+This mode provides the best performance by leveraging an NVIDIA GPU for the AI models, including the Avatar UI.
 
 ```bash
-docker-compose -f docker-compose.gpu.yml up --build
+docker compose -f docker-compose.gpu.yml up --build
 ```
+
+**Access points:**
+- **Avatar UI**: http://localhost:3000 (recommended)
+- **Agent API**: http://localhost:8080
+- **LLM Server**: http://localhost:30000
+- **Kokoro TTS**: http://localhost:8880
+
+### Docker Build Troubleshooting
+
+**✅ Current Status**: Docker build issues have been resolved. If you encounter any problems, try:
+
+```bash
+# Clean and rebuild (usually not needed now)
+make ui-rebuild
+
+# View build logs if needed
+make ui-logs
+
+# Clear Docker cache only if necessary
+make docker-clean
+```
+
+The system now builds reliably using optimized Dockerfile and npm configurations. See `avatar-ui/DOCKER_TROUBLESHOOTING.md` for the complete solution details.
 
 ---
 

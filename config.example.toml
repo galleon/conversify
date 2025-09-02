@@ -68,7 +68,7 @@ video_frame_interval = 0.2
 
 # Memory Configuration
 [memory]
-use = false
+use = true
 dir = "conversify/data/memory_store"
 load_last_n = 6
 

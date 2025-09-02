@@ -31,6 +31,19 @@ help:
 	@echo "  docker-cpu   Run with Docker (CPU mode)"
 	@echo "  docker-gpu   Run with Docker (GPU mode)"
 	@echo ""
+	@echo "UI Commands:"
+	@echo "  ui-dev       Start UI in development mode"
+	@echo "  ui-build     Build UI for production"
+	@echo "  ui-docker    Build and run UI with Docker"
+	@echo "  ui-install   Install UI dependencies"
+	@echo ""
+	@echo "Troubleshooting Commands:"
+	@echo "  ui-clean     Clean UI build artifacts"
+	@echo "  ui-rebuild   Clean and rebuild UI"
+	@echo "  docker-clean Clean Docker build cache"
+	@echo "  ui-debug     Debug UI Docker build"
+	@echo "  check-ui-env Check UI environment setup"
+	@echo ""
 
 # Installation commands
 install:
@@ -90,6 +103,55 @@ docker-gpu:
 	@echo "🐳 Starting Conversify with Docker (GPU mode)..."
 	docker-compose -f docker-compose.gpu.yml up --build
 
+# UI commands
+ui-install:
+	@echo "📦 Installing UI dependencies..."
+	cd avatar-ui && pnpm install
+	@echo "✅ UI dependencies installed"
+
+ui-dev:
+	@echo "🖥️  Starting UI in development mode..."
+	cd avatar-ui && pnpm dev
+
+ui-build:
+	@echo "🏗️  Building UI for production..."
+	cd avatar-ui && pnpm build
+
+ui-docker:
+	@echo "🐳 Building and running UI with Docker..."
+	docker-compose -f docker-compose.cpu.yml up --build avatar-ui
+
+ui-logs:
+	@echo "📋 Showing UI logs..."
+	docker-compose -f docker-compose.cpu.yml logs -f avatar-ui
+
+ui-clean:
+	@echo "🧹 Cleaning UI build artifacts..."
+	cd avatar-ui && rm -rf .next node_modules/.cache
+	@echo "✅ UI artifacts cleaned"
+
+ui-rebuild:
+	@echo "🔄 Clean rebuilding UI..."
+	cd avatar-ui && rm -rf .next node_modules/.cache
+	docker-compose -f docker-compose.cpu.yml build --no-cache avatar-ui
+	@echo "✅ UI rebuilt successfully"
+
+docker-clean:
+	@echo "🧹 Cleaning Docker build cache..."
+	docker builder prune -f
+	docker system prune -f
+	@echo "✅ Docker cache cleaned"
+
+ui-debug:
+	@echo "🔍 Running UI build with debug output..."
+	DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
+		-f avatar-ui/Dockerfile.simple -t conversify-ui-debug avatar-ui
+
+check-ui-env:
+	@echo "🔍 Checking UI environment configuration..."
+	@chmod +x scripts/check_ui_env.sh
+	@./scripts/check_ui_env.sh
+
 # Advanced development commands
 check-deps:
 	@echo "🔍 Checking for dependency vulnerabilities..."
@@ -115,7 +177,9 @@ dev-setup: install-dev setup-hooks
 	@echo "1. Copy config.example.toml to config.toml"
 	@echo "2. Copy .env.example to .env.local"
 	@echo "3. Configure your settings"
-	@echo "4. Run 'make run-app' to start the application"
+	@echo "4. Run 'make ui-install' to install UI dependencies"
+	@echo "5. Run 'make run-app' to start the application"
+	@echo "6. Run 'make ui-dev' to start the UI in development mode"
 
 # Show current configuration
 show-config:

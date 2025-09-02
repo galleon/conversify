@@ -56,15 +56,48 @@ services:
     networks:
       - conversify-network
 
+  knowledge-api:
+    build:
+      context: .
+      dockerfile: conversify.Dockerfile
+    mem_limit: 4g
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    # Start the knowledge API server
+    command: /bin/sh -lc "python -m conversify.main download-files || true; python -m conversify.main server"
+    depends_on:
+      config-check:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      # API server configuration
+      KNOWLEDGE_API_HOST: 0.0.0.0
+      KNOWLEDGE_API_PORT: 8080
+      KNOWLEDGE_API_WORKERS: 1
+      # Persist HF caches
+      HF_HOME: /opt/hf-cache
+      HUGGINGFACE_HUB_CACHE: /opt/hf-cache
+    volumes:
+      - hf_cache:/opt/hf-cache
+      - conversify_models:/app/conversify/data/models_cache
+      - conversify_storage:/app/storage
+      - ./config.toml:/app/config.toml:ro
+      - ./conversify/prompts:/app/conversify/prompts:ro
+      - ./logs:/app/logs
+    networks:
+      - conversify-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   conversify:
     build:
       context: .
       dockerfile: conversify.Dockerfile
     mem_limit: 12g
     restart: unless-stopped
-    ports:
-      - "8080:8080"
-    # Prewarm LiveKit plugin assets then start
+    # Prewarm LiveKit plugin assets then start main agent
     command: /bin/sh -lc "python -m conversify.main download-files || true; python -m conversify.main start"
     depends_on:
       config-check:
@@ -91,6 +124,7 @@ services:
     volumes:
       - hf_cache:/opt/hf-cache
       - conversify_models:/app/conversify/data/models_cache
+      - conversify_storage:/app/storage
       - ./config.toml:/app/config.toml:ro
       - ./conversify/prompts:/app/conversify/prompts:ro
       - ./logs:/app/logs
@@ -100,6 +134,32 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  avatar-ui:
+    build:
+      context: ./avatar-ui
+      dockerfile: Dockerfile.simple
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      network: host
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      # Override specific variables for UI
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    networks:
+      - conversify-network
+    # Allow UI to reach host services if needed
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - conversify
+      - knowledge-api
+
 networks:
   conversify-network:
 
@@ -107,3 +167,4 @@ volumes:
   ollama_data:
   hf_cache:
   conversify_models:
+  conversify_storage:

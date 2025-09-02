@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   llm:
@@ -15,7 +15,7 @@ services:
               count: all
               capabilities: [gpu]
     networks:
-      - default
+      - conversify-network
 
   kokoro:
     build:
@@ -31,25 +31,100 @@ services:
               count: all
               capabilities: [gpu]
     networks:
-      - default
+      - conversify-network
+
+  knowledge-api:
+    build:
+      context: .
+      dockerfile: conversify.Dockerfile
+    mem_limit: 4g
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    command: /bin/sh -lc "python -m conversify.main download-files || true; python -m conversify.main server"
+    depends_on:
+      - kokoro
+    env_file:
+      - .env.local
+    environment:
+      KNOWLEDGE_API_HOST: 0.0.0.0
+      KNOWLEDGE_API_PORT: 8080
+      KNOWLEDGE_API_WORKERS: 1
+      HF_HOME: /opt/hf-cache
+      HUGGINGFACE_HUB_CACHE: /opt/hf-cache
+      CONVERSIFY__LLM__BASE_URL: http://llm:30000/v1
+      CONVERSIFY__TTS__KOKORO__BASE_URL: http://kokoro:8880/v1
+    volumes:
+      - hf_cache:/opt/hf-cache
+      - conversify_models:/app/conversify/data/models_cache
+      - conversify_storage:/app/storage
+      - ./config.toml:/app/config.toml:ro
+      - ./conversify/prompts:/app/conversify/prompts:ro
+      - ./logs:/app/logs
+    networks:
+      - conversify-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   conversify:
     build:
       context: .
       dockerfile: conversify.Dockerfile
-    ports:
-      - "8080:8080"
+    mem_limit: 12g
+    restart: unless-stopped
+    command: /bin/sh -lc "python -m conversify.main download-files || true; python -m conversify.main start"
     depends_on:
       - llm
       - kokoro
+      - knowledge-api
     volumes:
-      - ./config.gpu.yaml:/app/config.yaml
-      - .:/app
+      - hf_cache:/opt/hf-cache
+      - conversify_models:/app/conversify/data/models_cache
+      - conversify_storage:/app/storage
+      - ./config.toml:/app/config.toml:ro
+      - ./conversify/prompts:/app/conversify/prompts:ro
+      - ./logs:/app/logs
     env_file:
       - .env.local
+    environment:
+      HF_HOME: /opt/hf-cache
+      HUGGINGFACE_HUB_CACHE: /opt/hf-cache
+      CONVERSIFY__LLM__BASE_URL: http://llm:30000/v1
+      CONVERSIFY__TTS__KOKORO__BASE_URL: http://kokoro:8880/v1
     networks:
-      - default
+      - conversify-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  avatar-ui:
+    build:
+      context: ./avatar-ui
+      dockerfile: Dockerfile.simple
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      network: host
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    networks:
+      - conversify-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - conversify
+      - knowledge-api
 
 networks:
-  default:
+  conversify-network:
     driver: bridge
+
+volumes:
+  hf_cache:
+  conversify_models:
+  conversify_storage:

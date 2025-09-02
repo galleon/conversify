@@ -450,3 +450,91 @@ class AgentMemoryManager:
             logger.warning(
                 f"No interactions were added to memory for {self.participant_identity}"
             )
+
+    async def add_background_knowledge(
+        self, file_id: str, filename: str, content: str
+    ) -> None:
+        """
+        Add background knowledge from uploaded files to the agent's memory.
+
+        Args:
+            file_id: Unique identifier for the file
+            filename: Original filename
+            content: Text content of the file
+        """
+        if not self.memory_config.get("use", False):
+            logger.info(
+                f"Memory is disabled in config for {self.participant_identity}. Skipping background knowledge."
+            )
+            return
+
+        if self.memory_manager is None:
+            logger.warning(
+                f"Memory manager not available for {self.participant_identity}. Cannot add background knowledge."
+            )
+            return
+
+        try:
+            # Create a knowledge prompt to integrate with memory
+            knowledge_prompt = f"[BACKGROUND KNOWLEDGE from {filename}]"
+            knowledge_response = f"I have access to background knowledge from the file '{filename}'. Here's a summary:\n\n{content[:2000]}..."
+
+            # Extract concepts and embeddings
+            combined_text = f"{knowledge_prompt} {knowledge_response}".strip()
+            concepts = self.memory_manager.extract_concepts(combined_text)
+            embedding = self.memory_manager.get_embedding(combined_text)
+
+            # Add to memory as a special interaction
+            self.memory_manager.add_interaction(
+                prompt=knowledge_prompt,
+                output=knowledge_response,
+                embedding=embedding,
+                concepts=concepts,
+            )
+
+            logger.info(
+                f"Added background knowledge from {filename} (ID: {file_id}) to memory for {self.participant_identity}"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to add background knowledge from {filename}: {e}",
+                exc_info=True,
+            )
+
+    def get_relevant_knowledge(self, query: str, max_results: int = 3) -> list[str]:
+        """
+        Retrieve relevant background knowledge based on a query.
+
+        Args:
+            query: The query to search for relevant knowledge
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of relevant knowledge snippets
+        """
+        if not self.memory_config.get("use", False) or self.memory_manager is None:
+            return []
+
+        try:
+            # Use Memoripy's search functionality to find relevant context
+            relevant_memories = self.memory_manager.get_memories(
+                query=query, max_results=max_results
+            )
+
+            knowledge_snippets = []
+            for memory in relevant_memories:
+                # Filter for background knowledge entries
+                if memory.get("prompt", "").startswith("[BACKGROUND KNOWLEDGE"):
+                    output = memory.get("output", "")
+                    if output:
+                        knowledge_snippets.append(output)
+
+            logger.debug(
+                f"Retrieved {len(knowledge_snippets)} relevant knowledge snippets for query: {query[:50]}..."
+            )
+            return knowledge_snippets
+
+        except Exception as e:
+            logger.error(f"Error retrieving relevant knowledge: {e}")
+            return []

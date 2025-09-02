@@ -2,6 +2,7 @@ import asyncio
 import functools
 import logging
 import os
+import sys
 from typing import Any
 
 import aiohttp as _aiohttp
@@ -190,7 +191,20 @@ async def entrypoint(ctx: JobContext, config: dict[str, Any]):
 
 
 def main():
-    """Main function that initializes and runs the applicaton."""
+    """Main function that handles CLI commands and runs the application."""
+    # Check for server command
+    if len(sys.argv) > 1 and sys.argv[1] == "server":
+        from .server import run_server
+
+        run_server()
+        return
+
+    # Check for download-files command
+    if len(sys.argv) > 1 and sys.argv[1] == "download-files":
+        print("Download files command - placeholder for model downloads")
+        return
+
+    # Default: run the agent
     # Configure basic logging BEFORE loading config
     logging.basicConfig(
         level="INFO",
@@ -218,8 +232,6 @@ def main():
     entrypoint_with_config = functools.partial(entrypoint, config=app_config)
     prewarm_with_config = functools.partial(prewarm, config=app_config)
 
-    logger.info(f"prewarm_with_config: {prewarm_with_config}")
-
     # Define worker options using loaded config
     worker_config = app_config["worker"]
     worker_options = WorkerOptions(
@@ -229,7 +241,6 @@ def main():
         load_threshold=worker_config["load_threshold"],
         job_memory_limit_mb=worker_config["job_memory_limit_mb"],
     )
-    logger.info(f"worker_options: {worker_options}")
 
     # Run the CLI application
     cli.run_app(worker_options)

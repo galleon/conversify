@@ -320,6 +320,37 @@ python -m pytest tests/
 # Enable gradually by updating pyproject.toml [tool.mypy] section
 ```
 
+**LiveKit dependency conflicts**
+```bash
+# If you get dependency resolution errors with livekit packages:
+# 1. Check for yanked versions in the error message
+# 2. Pin all livekit packages to compatible versions in pyproject.toml
+# 3. Run: uv sync to update dependencies
+# 4. For Docker builds, ensure you commit the updated uv.lock file
+```
+
+**Docker build fails with dependency errors**
+```bash
+# Make sure uv.lock is committed after dependency changes
+git add uv.lock pyproject.toml
+git commit -m "fix: update dependencies"
+
+# Clear Docker cache and rebuild
+docker system prune -f
+docker compose --profile ollama -f docker-compose.cpu.yml up --build
+```
+
+**AgentSession TypeError with unexpected keyword arguments**
+```bash
+# Error: AgentSession.__init__() got an unexpected keyword argument 'resume_false_interruption'
+# Fix: Check AgentSession parameters for your LiveKit version:
+cd /path/to/conversify
+python -c "from livekit.agents import AgentSession; import inspect; print(inspect.signature(AgentSession.__init__))"
+
+# Remove invalid parameters from main.py AgentSession initialization
+# Common issues: resume_false_interruption doesn't exist in livekit-agents 1.2.6
+```
+
 ### Getting Help
 
 1. Check this documentation

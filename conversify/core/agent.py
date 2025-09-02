@@ -124,6 +124,52 @@ class ConversifyAgent(Agent):
             last_message.content.append(ImageContent(image=latest_image))
             logger.debug("Successfully added ImageContent to the last message.")
 
+    def process_background_knowledge(self, chat_ctx: llm.ChatContext):
+        """Adds relevant background knowledge to the chat context based on the user's query."""
+        if not self.memory_handler or not chat_ctx.items:
+            return
+
+        last_message = chat_ctx.items[-1]
+
+        if (
+            last_message.role != "user"
+            or not last_message.content
+            or not isinstance(last_message.content[0], str)
+        ):
+            return
+
+        user_text = last_message.content[0]
+
+        # Get relevant knowledge from memory
+        try:
+            relevant_knowledge = self.memory_handler.get_relevant_knowledge(
+                query=user_text, max_results=3
+            )
+
+            if relevant_knowledge:
+                logger.info(
+                    f"Found {len(relevant_knowledge)} relevant knowledge snippets"
+                )
+
+                # Prepare knowledge context
+                knowledge_context = (
+                    "Based on the uploaded documents, here's relevant information:\n\n"
+                )
+                for i, knowledge in enumerate(relevant_knowledge, 1):
+                    knowledge_context += f"{i}. {knowledge[:500]}...\n\n"
+
+                # Add knowledge as a system message before the user message
+                knowledge_message = llm.ChatMessage(
+                    role="system", content=[knowledge_context]
+                )
+
+                # Insert before the last user message
+                chat_ctx.items.insert(-1, knowledge_message)
+                logger.debug("Added background knowledge to chat context")
+
+        except Exception as e:
+            logger.error(f"Error processing background knowledge: {e}")
+
     @staticmethod
     def clean_text(text_chunk: str) -> str:
         """Cleans text by removing special tags, code blocks, markdown, and emojis."""
@@ -155,8 +201,12 @@ class ConversifyAgent(Agent):
         tools: list[FunctionTool],
         model_settings: ModelSettings,
     ) -> AsyncIterable[llm.ChatChunk]:
-        """Processes context via LLM, potentially adding image first. Delegates to default."""
+        """Processes context via LLM, potentially adding image and background knowledge first. Delegates to default."""
         logger.debug(f"LLM node received context with {len(chat_ctx.items)} items.")
+
+        # Process background knowledge if memory is enabled
+        if self.config["memory"]["use"]:
+            self.process_background_knowledge(chat_ctx)
 
         # Only process image if vision is enabled in config
         if self.config["vision"]["use"]:
